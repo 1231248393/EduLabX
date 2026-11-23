@@ -62,3 +62,32 @@ coverage/
 *.log
 .vercel/
 .DS_Store
+
+# Dependencies
+node_modules/
+.next/
+dist/
+build/
+coverage/
+
+# Environment secrets
+.env
+.env.*
+!.env.example
+
+# Backup folders and files
+**/*backup*/
+**/*backup*
+**/*.bak
+**/*.old
+*.backup
+
+# Runtime files
+*.log
+*.pid
+
+# Python environments
+venv/
+.venv/
+__pycache__/
+*.pyc
