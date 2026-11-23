@@ -1,0 +1,10 @@
+export const instant = false; // 🚨 Fixes the Blocking Route error
+
+import ExperimentClient from "./ExperimentClient";
+import { practicalsData } from "@/data/practicalsData";
+
+export default async function ExperimentPage({ params }: { params: Promise<{ labSlug: string, expId: string }> }) {
+  const resolvedParams = await params;
+  const data = practicalsData[resolvedParams.expId] || practicalsData["am-demodulation"];
+  return <ExperimentClient data={data} />;
+}

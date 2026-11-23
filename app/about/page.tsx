@@ -1,58 +1,90 @@
-import React from "react";
+import Link from "next/link";
 
-export default function AboutUs() {
+const principles = [
+  {
+    number: "01",
+    title: "Connect theory with practice",
+    description: "Bring subject concepts, experiment procedures and interactive tools together so learners can move from reading to testing.",
+  },
+  {
+    number: "02",
+    title: "Make experimentation accessible",
+    description: "Provide structured learning activities that students can revisit, explore and use to prepare for laboratory sessions.",
+  },
+  {
+    number: "03",
+    title: "Support evidence-based learning",
+    description: "Encourage learners to record observations, compare expected and measured behaviour, and explain their conclusions.",
+  },
+];
+
+export default function AboutPage() {
   return (
-    <>
-      {/* SUB-HEADER BANNER */}
-      <div className="bg-[#0b5c9e] text-white pt-40 pb-12 px-8">
-        <div className="max-w-[1200px] mx-auto">
-          {/* Breadcrumb */}
-          <div className="text-sm text-blue-200 mb-4 flex gap-2 items-center">
-            <span className="hover:text-white cursor-pointer">Home</span>
-            <span>›</span>
-            <span className="text-white font-medium">About Us</span>
-          </div>
-          
-          {/* Title Area */}
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-8">
-            <h1 className="text-4xl md:text-5xl font-serif tracking-tight font-normal">
-              About VLAB
-            </h1>
-            <p className="md:w-1/2 text-blue-50 text-base leading-relaxed">
-              Learn about the Ministry of Education's initiative to provide remote-access to simulation-based labs in various disciplines of Science and Engineering.
+    <div className="min-h-screen bg-[#f7f8fa]">
+      <section className="bg-[#102638] px-6 pb-16 pt-20 text-white md:px-12 md:pb-20">
+        <div className="mx-auto max-w-[1200px]">
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-300">About the platform</p>
+          <div className="mt-5 grid gap-8 md:grid-cols-[1fr_0.8fr] md:items-end">
+            <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">Learning engineering by exploring how it works.</h1>
+            <p className="text-base leading-8 text-slate-300">
+              EduLabX is a proposed engineering learning and simulation platform that
+              brings subject resources, guided practical work and interactive tools
+              into one organised experience.
             </p>
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* MAIN CONTENT AREA */}
-      <main className="max-w-[1200px] mx-auto mt-12 px-8 pb-24">
-        <div className="bg-white p-8 md:p-12 border border-gray-200 shadow-sm leading-relaxed text-gray-700">
-          
-          <h2 className="text-2xl text-[#003b5c] font-bold mb-6">Overview</h2>
-          
-          <p className="mb-4">
-            Virtual Labs project is an initiative of Ministry of Education (MoE), Government of India under the aegis of National Mission on Education through Information and Communication Technology (NMEICT). This project is a consortium activity of twelve participating institutes and IIT Delhi is coordinating institute.
-          </p>
-          <p className="mb-8">
-            It is a paradigm shift in ICT-based education. For the first time, such an initiative has been taken-up in remote-experimentation. Under Virtual Labs project, over 175 Virtual Labs consisting of approximately 1590+ web-enabled experiments were designed for remote-operation and viewing.
-          </p>
-
-          <p className="mb-4">
-            Virtual Labs do not require any additional infrastructural setup for conducting experiments at user premises. The simulations-based experiments can be accessed remotely via internet.
-          </p>
-
-          {/* DIAGRAM IMAGE SECTION */}
-          <div className="w-full mt-12 flex justify-center border-t border-gray-100 pt-10">
-             <img 
-               src="/diagram.jpg" 
-               alt="Virtual Labs Diagram" 
-               className="w-full max-w-3xl h-auto object-contain mix-blend-multiply" 
-             />
+      <main className="mx-auto max-w-[1200px] px-6 py-14 md:px-12 md:py-20">
+        <section className="grid gap-10 md:grid-cols-[0.8fr_1.2fr]">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-800">Our purpose</p>
+            <h2 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">A practical companion for engineering education.</h2>
           </div>
+          <div className="space-y-5 text-base leading-8 text-slate-600">
+            <p>
+              Engineering is learned through a combination of concepts, calculations,
+              design decisions and experiments. EduLabX is being developed to help
+              organise these parts of the learning process.
+            </p>
+            <p>
+              The platform brings together department-based subject catalogues,
+              experiment guidance and a connection to CircuitWeb, an independently
+              developed browser-based circuit design and simulation project.
+            </p>
+            <p>
+              Its initial focus is on electronics and communication engineering,
+              with a structure that can accommodate additional departments and
+              practical subjects as verified content becomes available.
+            </p>
+          </div>
+        </section>
 
-        </div>
+        <section className="mt-16 grid gap-5 md:grid-cols-3">
+          {principles.map((item) => (
+            <article key={item.number} className="border border-slate-200 bg-white p-7 shadow-sm">
+              <p className="text-sm font-bold tracking-[0.18em] text-cyan-700">{item.number}</p>
+              <h3 className="mt-5 text-xl font-semibold text-slate-900">{item.title}</h3>
+              <p className="mt-3 text-sm leading-7 text-slate-600">{item.description}</p>
+            </article>
+          ))}
+        </section>
+
+        <section className="mt-16 border border-slate-200 bg-white p-8 md:p-10">
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-800">Development status</p>
+          <h2 className="mt-3 text-2xl font-semibold text-slate-950">A project under active development</h2>
+          <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-600">
+            EduLabX is a student-led project concept. Any formal partnership,
+            institutional endorsement, use of college branding or external
+            publication will be undertaken only with the relevant approvals.
+            EduLabX is not the official Virtual Labs initiative of the Ministry
+            of Education and is not affiliated with that programme.
+          </p>
+          <Link href="/labs" className="mt-7 inline-flex bg-slate-900 px-6 py-3 text-sm font-semibold text-white transition hover:bg-cyan-800">
+            Explore available subjects →
+          </Link>
+        </section>
       </main>
-    </>
+    </div>
   );
 }

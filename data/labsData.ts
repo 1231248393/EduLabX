@@ -55,7 +55,21 @@ export const allBranches = [
       { title: "Signals and Systems (S&S)", slug: "signals-systems", shortName: "S&S", desc: "Analyze continuous and discrete signals in time and frequency domains." },
       { title: "Electronic Devices and Circuits (EDC)", slug: "electronic-devices-circuits", shortName: "EDC", desc: "Study semiconductor physics, diodes, BJTs, and MOSFET characteristics." },
       { title: "Computer Networks (CN)", slug: "computer-networks", shortName: "CN", desc: "Simulate network topologies, routing algorithms, and data communication protocols." },
-      { title: "Microprocessors and Microcontrollers (MPMC)", slug: "microprocessors-microcontrollers", shortName: "MPMC", desc: "Program 8085/8086 and 8051 architectures through virtual emulators." },
+      {
+        title: "Microprocessors and Microcontrollers (MPMC)",
+        slug: "microprocessors-microcontrollers",
+        shortName: "MPMC",
+        desc: "Study microprocessor and microcontroller architecture, trainer kits and 8085 assembly-language programming.",
+        overview: "The Microprocessors and Microcontrollers Laboratory introduces students to programmable digital processing systems. The practical sequence begins with the 8085 microprocessor trainer and microcontroller trainer hardware, then develops assembly-language programming skills through 16-bit addition/subtraction and 8-bit multiplication. The supplied MPS 85-3 manual and practical sheets are presented alongside labelled teaching diagrams, hardware photographs, opcode tables and step-by-step explanations.",
+        objectives: [
+          "Identify the major functional blocks, buses, registers and pins of the 8085 microprocessor.",
+          "Recognize the microcontroller trainer hardware and relate its I/O, memory and peripheral sections to a standard microcontroller architecture.",
+          "Write and trace 8085 assembly-language programs using mnemonics and hexadecimal opcodes.",
+          "Perform 16-bit addition and subtraction and verify the result in memory.",
+          "Implement 8-bit multiplication using the repetitive-addition method and verify the stored result.",
+          "Interpret memory addresses, opcode bytes, flags and program execution flow."
+        ]
+      },
       { title: "VLSI Design", slug: "vlsi-design", shortName: "VLSI", desc: "Simulate CMOS logic design, layout techniques, and hardware description languages." },
       { title: "Analog Electronics (AE)", slug: "analog-electronics", shortName: "AE", desc: "Core analog circuits including operational amplifiers and feedback amplifiers." }
     ]

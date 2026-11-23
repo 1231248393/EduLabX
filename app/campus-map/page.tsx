@@ -105,7 +105,7 @@ const campusBuildings = [
   },
 ];
 
-function ResizeMap({ containerRef, isFullscreen }: { containerRef: React.RefObject<HTMLDivElement>, isFullscreen: boolean }) {
+function ResizeMap({ containerRef, isFullscreen }: { containerRef: React.RefObject<HTMLDivElement | null>, isFullscreen: boolean }) {
   const map = useMap();
   useEffect(() => {
     if (!map || !containerRef.current) return;
