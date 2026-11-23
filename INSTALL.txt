@@ -1,0 +1,26 @@
+EduLabX MPMC – 8085 Assembly Compiler & Execute feature
+
+Install:
+1. Back up the project folder.
+2. Extract this ZIP into the root of college-portal-temp (preserve folder paths).
+3. Run pnpm run dev.
+4. Hard refresh the browser with Ctrl+Shift+R.
+
+This patch adds:
+- Experiment 1: 8085 Assembly Editor & Compiler below the 8085 trainer.
+- Experiment 3: Assembly Editor & Compiler below the existing 16-bit simulator.
+  Includes Program A addition and a button to load Program B subtraction.
+- Experiment 4: Assembly Editor & Compiler below the multiplication simulator.
+- Compile validates supported assembly syntax and generates opcode bytes and
+  memory addresses. Step and Execute run the compiled machine-code bytes in
+  the educational 8085 CPU model. The UI shows registers, flags, RAM output,
+  compiler errors and instruction trace.
+
+Supported instruction subset:
+NOP, HLT, MVI, LXI, MOV, ADD, SUB, DAD, DCR, STA, SHLD, JNZ, and ORG.
+Hexadecimal constants should use H suffix, for example 05H, 3250H.
+Labels such as LOOP: are supported for JNZ.
+
+This is a teaching subset, not a complete Intel 8085 assembler. Unsupported
+instructions produce a compiler error rather than being silently accepted.
+Experiment 2, CircuitWeb and AM Demodulation are not changed.

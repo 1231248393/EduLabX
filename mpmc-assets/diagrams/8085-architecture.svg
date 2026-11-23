@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="650" viewBox="0 0 1100 650">
+<title>8085 Microprocessor — Functional Block Diagram</title><rect width="100%" height="100%" fill="#ffffff"/>
+<style>
+.t{font-family:Arial,sans-serif;fill:#102a43} .h{font-size:27px;font-weight:bold} .b{font-size:20px;font-weight:bold} .s{font-size:16px} .box{fill:#eef6ff;stroke:#1769aa;stroke-width:3;rx:14} .line{stroke:#1769aa;stroke-width:3;fill:none} .sub{fill:#f4f7fa;stroke:#64748b;stroke-width:2;rx:10}
+</style><text x="550" y="45" text-anchor="middle" class="t h">8085 Microprocessor — Functional Block Diagram</text><rect x="390" y="105" width="320" height="420" class="box"/>
+<text x="550" y="145" text-anchor="middle" class="t h">8085 CPU</text>
+<rect x="435" y="175" width="230" height="70" class="sub"/><text x="550" y="218" text-anchor="middle" class="t b">ALU + Accumulator</text>
+<rect x="435" y="270" width="230" height="65" class="sub"/><text x="550" y="310" text-anchor="middle" class="t b">Register Array</text>
+<rect x="435" y="360" width="230" height="60" class="sub"/><text x="550" y="398" text-anchor="middle" class="t b">Instruction Decoder</text>
+<rect x="435" y="445" width="230" height="55" class="sub"/><text x="550" y="480" text-anchor="middle" class="t b">Timing & Control</text>
+<rect x="40" y="210" width="230" height="110" class="sub"/><text x="155" y="255" text-anchor="middle" class="t b">Memory</text><text x="155" y="285" text-anchor="middle" class="t s">Program / Data</text>
+<rect x="830" y="210" width="230" height="110" class="sub"/><text x="945" y="255" text-anchor="middle" class="t b">I/O Devices</text><text x="945" y="285" text-anchor="middle" class="t s">Input / Output</text>
+<path d="M270 265 H390 M710 265 H830" class="line"/><text x="330" y="245" class="t s" text-anchor="middle">Address / Data / Control</text>
+<path d="M550 525 V575 H155 V320 M550 575 H945 V320" class="line"/>
+<text x="550" y="615" text-anchor="middle" class="t s">External system bus connects CPU, memory and peripherals</text></svg>

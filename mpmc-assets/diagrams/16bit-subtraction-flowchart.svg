@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="734" viewBox="0 0 900 734" role="img" aria-labelledby="title desc">
+<title id="title">16-bit Subtraction — Supplied 8085 Listing</title><desc id="desc">Step-by-step program flowchart.</desc>
+<rect width="100%" height="100%" fill="#f8fafc"/>
+<text x="450.0" y="48" text-anchor="middle" font-family="Arial,sans-serif" font-size="25" font-weight="700" fill="#0f172a">16-bit Subtraction — Supplied 8085 Listing</text>
+<rect x="125" y="90" width="650" height="64" rx="14" fill="#e0f2fe" stroke="#0b5c9e" stroke-width="2"/>
+<text x="450.0" y="127.5" text-anchor="middle" font-family="Arial,sans-serif" font-size="17" fill="#0f172a">Start: load operands into HL and BC as listed</text>
+<path d="M 450.0 154 V 180 M 442.0 171 L 450.0 180 L 458.0 171" fill="none" stroke="#0b5c9e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="125" y="188" width="650" height="64" rx="14" fill="#e0f2fe" stroke="#0b5c9e" stroke-width="2"/>
+<text x="450.0" y="225.5" text-anchor="middle" font-family="Arial,sans-serif" font-size="17" fill="#0f172a">Move L into A and execute SUB C</text>
+<path d="M 450.0 252 V 278 M 442.0 269 L 450.0 278 L 458.0 269" fill="none" stroke="#0b5c9e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="125" y="286" width="650" height="64" rx="14" fill="#e0f2fe" stroke="#0b5c9e" stroke-width="2"/>
+<text x="450.0" y="323.5" text-anchor="middle" font-family="Arial,sans-serif" font-size="17" fill="#0f172a">Store low-byte result at 8025H</text>
+<path d="M 450.0 350 V 376 M 442.0 367 L 450.0 376 L 458.0 367" fill="none" stroke="#0b5c9e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="125" y="384" width="650" height="64" rx="14" fill="#e0f2fe" stroke="#0b5c9e" stroke-width="2"/>
+<text x="450.0" y="421.5" text-anchor="middle" font-family="Arial,sans-serif" font-size="17" fill="#0f172a">Move H into A and execute SUB B</text>
+<path d="M 450.0 448 V 474 M 442.0 465 L 450.0 474 L 458.0 465" fill="none" stroke="#0b5c9e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="125" y="482" width="650" height="64" rx="14" fill="#e0f2fe" stroke="#0b5c9e" stroke-width="2"/>
+<text x="450.0" y="519.5" text-anchor="middle" font-family="Arial,sans-serif" font-size="17" fill="#0f172a">Store high-byte result at 8026H</text>
+<path d="M 450.0 546 V 572 M 442.0 563 L 450.0 572 L 458.0 563" fill="none" stroke="#0b5c9e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="125" y="580" width="650" height="64" rx="14" fill="#e0f2fe" stroke="#0b5c9e" stroke-width="2"/>
+<text x="450.0" y="617.5" text-anchor="middle" font-family="Arial,sans-serif" font-size="17" fill="#0f172a">HLT: stop program; supplied listing does not use SBB for borrow</text>
+</svg>

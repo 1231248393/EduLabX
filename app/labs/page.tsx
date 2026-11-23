@@ -19,7 +19,7 @@ function LabsLibrary() {
       branchName: branch.title,
       branchSlug: branch.slug,
       // Ensure every lab has a slug fallback
-      slug: (lab as any).slug || "analog-digital-electronics-i" 
+      slug: lab.slug 
     }))
   );
 
@@ -32,9 +32,9 @@ function LabsLibrary() {
   return (
     <>
       <PageHeader 
-        title="All Virtual Labs" 
+        title="Explore learning labs" 
         breadcrumb="Labs Library"
-        description="Search and explore our comprehensive collection of virtual laboratories across all engineering branches."
+        description="Find subject areas, guided practicals and interactive learning resources across the departments currently listed on EduLabX."
       />
 
       <main className="max-w-[1200px] mx-auto mt-12 px-8 pb-24">
@@ -42,7 +42,7 @@ function LabsLibrary() {
         {/* Search Info Bar */}
         <div className="mb-6 flex justify-between items-center bg-gray-100 p-4 rounded border border-gray-200">
           <p className="text-gray-700 font-medium">
-            Showing {filteredLabs.length} subjects {searchQuery && `for "${searchQuery}"`}
+            Showing {filteredLabs.length} subject areas {searchQuery && `for "${searchQuery}"`}
           </p>
           {searchQuery && (
              <button onClick={() => setSearchQuery("")} className="text-sm text-[#0b5c9e] hover:underline">
@@ -72,7 +72,7 @@ function LabsLibrary() {
                   href={`/labs/${lab.slug}`} 
                   className="w-full block text-center bg-[#0b5c9e] text-white py-2 text-sm font-medium hover:bg-blue-800 transition-colors"
                 >
-                  Go to Lab
+                  Explore subject
                 </Link>
               </div>
             </Reveal>

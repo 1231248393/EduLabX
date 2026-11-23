@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="760" viewBox="0 0 1200 760" role="img" aria-labelledby="title desc">
+<title id="title">8085 Microprocessor Functional Architecture</title>
+<desc id="desc">Block diagram showing the 8085 CPU internal units, address and data buses, memory, and input output peripherals.</desc>
+<defs>
+  <style>
+    .heading{font: bold 30px Arial,sans-serif;fill:#102a43}
+    .label{font: bold 21px Arial,sans-serif;fill:#102a43}
+    .small{font: 17px Arial,sans-serif;fill:#243b53}
+    .box{fill:#e8f3ff;stroke:#1769aa;stroke-width:3}
+    .unit{fill:#fff;stroke:#4b7da8;stroke-width:2}
+    .bus{fill:none;stroke:#1769aa;stroke-width:4}
+    .note{font: 16px Arial,sans-serif;fill:#334e68}
+  </style>
+  <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#1769aa"/></marker>
+</defs>
+<rect width="1200" height="760" fill="#ffffff"/>
+<text x="600" y="48" text-anchor="middle" class="heading">8085 Microprocessor — Functional Block Diagram</text>
+<!-- CPU -->
+<rect x="345" y="105" width="510" height="535" rx="22" class="box"/>
+<text x="600" y="145" text-anchor="middle" class="heading">8085 CPU (8-bit)</text>
+<rect x="390" y="175" width="200" height="100" rx="12" class="unit"/>
+<text x="490" y="214" text-anchor="middle" class="label">ALU</text>
+<text x="490" y="243" text-anchor="middle" class="small">Arithmetic / Logic</text>
+<rect x="610" y="175" width="200" height="100" rx="12" class="unit"/>
+<text x="710" y="214" text-anchor="middle" class="label">Accumulator</text>
+<text x="710" y="243" text-anchor="middle" class="small">8-bit register</text>
+<path d="M590 225 H610" class="bus" marker-end="url(#arrow)"/>
+<rect x="390" y="310" width="420" height="90" rx="12" class="unit"/>
+<text x="600" y="347" text-anchor="middle" class="label">Register Array</text>
+<text x="600" y="378" text-anchor="middle" class="small">B, C, D, E, H, L · Flag register · SP · PC</text>
+<rect x="390" y="430" width="200" height="80" rx="12" class="unit"/>
+<text x="490" y="464" text-anchor="middle" class="label">Instruction</text>
+<text x="490" y="490" text-anchor="middle" class="small">Decoder</text>
+<rect x="610" y="430" width="200" height="80" rx="12" class="unit"/>
+<text x="710" y="464" text-anchor="middle" class="label">Timing &amp; Control</text>
+<text x="710" y="490" text-anchor="middle" class="small">RD · WR · ALE · IO/M</text>
+<rect x="390" y="540" width="420" height="65" rx="12" class="unit"/>
+<text x="600" y="580" text-anchor="middle" class="label">Interrupt &amp; Serial I/O Control</text>
+<!-- external memory and IO -->
+<rect x="35" y="250" width="235" height="135" rx="15" class="unit"/>
+<text x="152" y="292" text-anchor="middle" class="label">Memory</text>
+<text x="152" y="324" text-anchor="middle" class="small">Program and data</text>
+<text x="152" y="352" text-anchor="middle" class="small">RAM / ROM</text>
+<rect x="930" y="250" width="235" height="135" rx="15" class="unit"/>
+<text x="1047" y="292" text-anchor="middle" class="label">I/O Peripherals</text>
+<text x="1047" y="324" text-anchor="middle" class="small">8255 · 8251 · 8279</text>
+<text x="1047" y="352" text-anchor="middle" class="small">External devices</text>
+<path d="M270 315 H345" class="bus" marker-end="url(#arrow)"/>
+<path d="M855 315 H930" class="bus" marker-end="url(#arrow)"/>
+<text x="307" y="292" text-anchor="middle" class="note">Bus</text>
+<text x="892" y="292" text-anchor="middle" class="note">Bus</text>
+<!-- buses at bottom -->
+<path d="M600 640 V680 H152 V385" class="bus"/>
+<path d="M600 680 H1047 V385" class="bus"/>
+<text x="600" y="715" text-anchor="middle" class="small">System connections: 16-bit address bus · 8-bit data bus · control signals</text>
+<text x="600" y="744" text-anchor="middle" class="note">Conceptual functional architecture — not a physical pin-layout diagram</text>
+</svg>

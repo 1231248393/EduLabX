@@ -1,0 +1,3 @@
+$ next dev -- --hostname 0.0.0.0 --port 3000
+Invalid project directory provided, no such directory: /home/singhh/college-portal-temp/--hostname
+[ELIFECYCLE] Command failed with exit code 1.

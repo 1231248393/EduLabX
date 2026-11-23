@@ -1,0 +1,952 @@
+"use client";
+
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent } from "react";
+import type { AMSettings } from "./AMDemodulationSimulation";
+import { buildAMElectricalNets } from "./AMCircuitNetlist";
+
+type PartType = "source" | "diode" | "capacitor" | "resistor" | "switch" | "ground" | "scope";
+type Part = { id: string; type: PartType; name: string; x: number; y: number; value: number; role?: "rl1" | "rl2"; model?: string; rotation?: number; properties?: Record<string, string | number> };
+type InspectorDraft = { name: string; value: number; model: string; carrierHz: number; messageHz: number; modulation: number; unit: string; tolerance: number; power: number; voltage: number; maxCurrent: number; generatorType: string; waveform: string; load: "RL1" | "RL2"; timeDiv: number; voltsDiv: number; channels: string; coupling: string; groundType: string };
+type Terminal = { x: number; y: number; name: string; label: string };
+type Endpoint = { compId: string; pin: string };
+type Wire = { id: string; from: Endpoint; to: Endpoint; points?: Array<{ x: number; y: number }> };
+type Board = { parts: Part[]; wires: Wire[] };
+type SavedDesign = { id: string; name: string; parts: Part[]; wires: Wire[]; updatedAt: string };
+type Mode = "fixed" | "new";
+type CircuitRoles = { source: Part; diode: Part; capacitor: Part; loadSwitch: Part; ground: Part; scope: Part; resistor1: Part; resistor2: Part };
+type CircuitValidation = { valid: boolean; message: string; roles?: CircuitRoles };
+const BOARD_STORAGE_KEY = "edulabx:practical:am-demodulation:board-v1";
+const DESIGNS_STORAGE_KEY = "edulabx:practical:am-demodulation:designs-v1";
+
+export type AMSettingKey = Exclude<keyof AMSettings, "load">;
+
+const BOARD = { width: 900, height: 460 };
+const partCatalog: Array<{ type: PartType; name: string; symbol: string; color: string }> = [
+  { type: "source", name: "AM signal generator", symbol: "AM", color: "#0e7490" },
+  { type: "diode", name: "Diode · D1", symbol: "D", color: "#475569" },
+  { type: "capacitor", name: "Capacitor · C1", symbol: "C", color: "#475569" },
+  { type: "resistor", name: "Load resistor", symbol: "R", color: "#475569" },
+  { type: "switch", name: "SPDT switch · S1", symbol: "S", color: "#475569" },
+  { type: "ground", name: "Ground", symbol: "GND", color: "#475569" },
+  { type: "scope", name: "CRO / DSO", symbol: "DSO", color: "#0f766e" },
+];
+
+function partSize(type: PartType) {
+  return type === "ground" ? { width: 70, height: 48 } : { width: 150, height: 100 };
+}
+
+function terminals(part: Part): Terminal[] {
+  switch (part.type) {
+    case "source": return [
+      { x: 150, y: 38, name: "out", label: "+" },
+      { x: 150, y: 70, name: "gnd", label: "−" },
+    ];
+    case "diode": return [
+      { x: 0, y: 50, name: "anode", label: "A" },
+      { x: 150, y: 50, name: "cathode", label: "K" },
+    ];
+    case "capacitor": return [
+      { x: 75, y: 0, name: "top", label: "+" },
+      { x: 75, y: 100, name: "bottom", label: "−" },
+    ];
+    case "resistor": return [
+      { x: 0, y: 50, name: "p1", label: "1" },
+      { x: 150, y: 50, name: "p2", label: "2" },
+    ];
+    case "switch": return [
+      { x: 0, y: 50, name: "common", label: "C" },
+      { x: 150, y: 28, name: "throw1", label: "1" },
+      { x: 150, y: 78, name: "throw2", label: "2" },
+    ];
+    case "ground": return [{ x: 35, y: 0, name: "gnd", label: "GND" }];
+    case "scope": return [
+      { x: 0, y: 27, name: "ch1", label: "1" },
+      { x: 0, y: 52, name: "ch2", label: "2" },
+      { x: 0, y: 77, name: "gnd", label: "G" },
+    ];
+  }
+}
+
+function newPart(type: PartType, index: number, settings: AMSettings): Part {
+  const catalog = partCatalog.find((part) => part.type === type)!;
+  const size = partSize(type);
+  const value = type === "capacitor" ? settings.capacitanceNf
+    : type === "resistor" ? 10000
+      : type === "diode" ? settings.diodeDrop
+        : type === "source" ? settings.amplitude : 0;
+  return {
+    id: `${type}-${Date.now()}-${index}`,
+    type,
+    name: catalog.name,
+    x: Math.max(10, (BOARD.width - size.width) / 2 + (index % 3) * 18),
+    y: Math.max(10, (BOARD.height - size.height) / 2 + (index % 2) * 18),
+    value,
+  };
+}
+
+function fixedCircuit(settings: AMSettings): { parts: Part[]; wires: Wire[] } {
+  const parts: Part[] = [
+    { id: "am-source", type: "source", name: "AM Signal Generator", x: 30, y: 188, value: settings.amplitude },
+    { id: "d1", type: "diode", name: "D1 · 1N4148", x: 220, y: 185, value: settings.diodeDrop },
+    { id: "c1", type: "capacitor", name: "C1", x: 422, y: 150, value: settings.capacitanceNf },
+    { id: "s1", type: "switch", name: "S1 · Load select", x: 535, y: 182, value: settings.load === "RL2" ? 2 : 1 },
+    { id: "rl1", type: "resistor", name: "RL1 · Large load", x: 720, y: 88, value: settings.rl1Ohms, role: "rl1" },
+    { id: "rl2", type: "resistor", name: "RL2 · Small load", x: 720, y: 284, value: settings.rl2Ohms, role: "rl2" },
+    { id: "gnd", type: "ground", name: "Ground", x: 390, y: 360, value: 0 },
+    { id: "dso", type: "scope", name: "CRO / DSO", x: 730, y: 4, value: 0 },
+  ];
+  const wires: Wire[] = [
+    ["am-source", "out", "d1", "anode"], ["am-source", "out", "dso", "ch1"],
+    ["d1", "cathode", "c1", "top"], ["d1", "cathode", "s1", "common"], ["d1", "cathode", "dso", "ch2"],
+    ["c1", "bottom", "gnd", "gnd"], ["s1", "throw1", "rl1", "p1"], ["s1", "throw2", "rl2", "p1"],
+    ["rl1", "p2", "gnd", "gnd"], ["rl2", "p2", "gnd", "gnd"],
+    ["am-source", "gnd", "gnd", "gnd"], ["dso", "gnd", "gnd", "gnd"],
+  ].map((item, index) => ({ id: `fixed-wire-${index + 1}`, from: { compId: item[0], pin: item[1] }, to: { compId: item[2], pin: item[3] } }));
+  return { parts, wires };
+}
+
+function validateCircuit(parts: Part[], wires: Wire[], activeLoad: "RL1" | "RL2"): CircuitValidation {
+  const source = parts.find((part) => part.type === "source");
+  const diode = parts.find((part) => part.type === "diode");
+  const capacitor = parts.find((part) => part.type === "capacitor");
+  const loadSwitch = parts.find((part) => part.type === "switch");
+  const ground = parts.find((part) => part.type === "ground");
+  const scope = parts.find((part) => part.type === "scope");
+  const resistors = parts.filter((part) => part.type === "resistor");
+  if (!source || !diode || !capacitor || !loadSwitch || !ground || !scope || resistors.length !== 2 ||
+      parts.filter((part) => part.type === "source").length !== 1 ||
+      parts.filter((part) => part.type === "diode").length !== 1 ||
+      parts.filter((part) => part.type === "capacitor").length !== 1 ||
+      parts.filter((part) => part.type === "switch").length !== 1 ||
+      parts.filter((part) => part.type === "ground").length !== 1 ||
+      parts.filter((part) => part.type === "scope").length !== 1) {
+    return { valid: false, message: "Place one AM generator, diode, capacitor, SPDT switch, two load resistors, ground and DSO." };
+  }
+  const netlist = buildAMElectricalNets(parts, wires, activeLoad);
+  if (netlist.ignoredWires.length) return { valid: false, message: "One or more wires refer to missing component pins. Reconnect those terminals." };
+  const same = (a: Part, ap: string, b: Part, bp: string) => netlist.sameNet({ compId: a.id, pin: ap }, { compId: b.id, pin: bp });
+  const resistor1 = resistors.find((part) => same(loadSwitch, "throw1", part, "p1"));
+  const resistor2 = resistors.find((part) => same(loadSwitch, "throw2", part, "p1"));
+  const connections = [
+    same(source, "out", diode, "anode"),
+    same(source, "out", scope, "ch1"),
+    same(source, "gnd", ground, "gnd"),
+    !same(source, "out", ground, "gnd"),
+    !same(source, "out", diode, "cathode"),
+    same(diode, "cathode", capacitor, "top"),
+    same(diode, "cathode", loadSwitch, "common"),
+    same(diode, "cathode", scope, "ch2"),
+    !same(diode, "cathode", ground, "gnd"),
+    same(capacitor, "bottom", ground, "gnd"),
+    same(scope, "gnd", ground, "gnd"),
+    Boolean(resistor1 && same(resistor1, "p2", ground, "gnd")),
+    Boolean(resistor2 && same(resistor2, "p2", ground, "gnd")),
+    Boolean(resistor1 && !same(resistor1, "p1", ground, "gnd")),
+    Boolean(resistor2 && !same(resistor2, "p1", ground, "gnd")),
+    Boolean(resistor1 && (activeLoad === "RL1"
+    ? same(resistor1, "p1", diode, "cathode")
+    : !same(resistor1, "p1", diode, "cathode"))),
+    Boolean(resistor2 && (activeLoad === "RL2"
+    ? same(resistor2, "p1", diode, "cathode")
+    : !same(resistor2, "p1", diode, "cathode"))),
+    Boolean(resistor1 && resistor2 && !same(resistor1, "p1", resistor2, "p1")),
+  ];
+  if (!connections.every(Boolean) || !resistor1 || !resistor2) {
+    return { valid: false, message: "Connect the AM input to D1, the detector node to C1/S1/CH2, and each load return to common ground." };
+  }
+  if (capacitor.value <= 0 || resistor1.value <= 0 || resistor2.value <= 0) {
+    return { valid: false, message: "Set positive values for C1, RL1 and RL2." };
+  }
+  return { valid: true, message: "Detector topology connected · waveform solver ready", roles: { source, diode, capacitor, loadSwitch, ground, scope, resistor1, resistor2 } };
+}
+
+function componentBodyStyle(selected: boolean): CSSProperties {
+  return {
+    position: "absolute", inset: 0, width: "100%", height: "100%",
+    outline: selected ? "2px solid #f59e0b" : "none", outlineOffset: 1, borderRadius: 8,
+    background: "transparent", boxShadow: "none",
+    display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center",
+    fontFamily: "Arial, sans-serif", userSelect: "none", cursor: "move", color: "#0f172a", overflow: "visible",
+  };
+}
+
+// Part drawings are adapted from CircuitWeb's RealisticIcons; this local
+// renderer keeps the EduLabX build independent while retaining its pin model.
+function PartArtwork({ part, value }: { part: Part; value: number }) {
+  const lead = "#aeb7c2";
+  if (part.type === "source") return <svg viewBox="0 0 150 100" width="150" height="100" aria-hidden="true">
+    <path d="M112 38H150M112 70H150" stroke={lead} strokeWidth="4" />
+    <rect x="18" y="18" width="96" height="68" rx="10" fill="#2563eb" stroke="#1d4ed8" strokeWidth="2" />
+    <rect x="27" y="27" width="78" height="38" rx="4" fill="#0f3e73" />
+    <path d="M31 46 Q40 29 49 46 T67 46 T85 46 T102 46" fill="none" stroke="#67e8f9" strokeWidth="2.5" />
+    <text x="66" y="77" textAnchor="middle" fontSize="7" fontWeight="700" fill="#fff">{part.properties?.waveform === "Sine" ? "SINE GENERATOR" : part.properties?.generatorType === "Function generator" ? "FUNCTION GENERATOR" : "AM GENERATOR"}</text>
+  </svg>;
+  if (part.type === "diode") return <svg viewBox="0 0 150 100" width="150" height="100" aria-hidden="true">
+    <path d="M0 50H43M107 50H150" stroke={lead} strokeWidth="4" />
+    <rect x="42" y="35" width="66" height="30" rx="11" fill="#30343b" stroke="#111827" strokeWidth="2" />
+    <path d="M94 35V65" stroke="#f8fafc" strokeWidth="4" />
+    <text x="75" y="84" textAnchor="middle" fontSize="8" fill="#475569">{part.model || "1N4148"} · Vf {value.toFixed(2)} V</text>
+  </svg>;
+  if (part.type === "capacitor") return <svg viewBox="0 0 150 100" width="150" height="100" aria-hidden="true">
+    <path d="M75 0V26M75 74V100" stroke={lead} strokeWidth="3" />
+    <rect x="52" y="22" width="46" height="56" rx="12" fill="#1d4f91" stroke="#173b68" strokeWidth="2" />
+    <ellipse cx="75" cy="27" rx="20" ry="5" fill="#4f83bd" />
+    <path d="M63 34V68" stroke="#93c5fd" strokeWidth="2" opacity=".7" />
+    <text x="84" y="53" fontSize="11" fill="#fff">+</text>
+    <text x="75" y="94" textAnchor="middle" fontSize="8" fill="#475569">{value} nF</text>
+  </svg>;
+  if (part.type === "resistor") {
+    const bands = ["#78350f", "#dc2626", "#eab308", "#eab308"];
+    return <svg viewBox="0 0 150 100" width="150" height="100" aria-hidden="true">
+      <path d="M0 50H34M116 50H150" stroke={lead} strokeWidth="4" />
+      <rect x="33" y="38" width="84" height="24" rx="8" fill="#fdf6e3" stroke="#a8a29e" strokeWidth="1.5" />
+      {bands.map((color, index) => <rect key={index} x={46 + index * 15} y="39" width={index === 3 ? 3 : 5} height="22" fill={color} />)}
+      <text x="75" y="83" textAnchor="middle" fontSize="8" fill="#475569">{(value / 1000).toFixed(1)} kΩ</text>
+    </svg>;
+  }
+  if (part.type === "switch") return <svg viewBox="0 0 150 100" width="150" height="100" aria-hidden="true">
+    <path d="M0 50H35M115 28H150M115 78H150" stroke={lead} strokeWidth="4" />
+    <circle cx="36" cy="50" r="6" fill="#334155" />
+    <circle cx="114" cy="28" r="6" fill={part.value === 1 ? "#0b78a5" : "#fff"} stroke="#334155" strokeWidth="2" />
+    <circle cx="114" cy="78" r="6" fill={part.value === 2 ? "#0b78a5" : "#fff"} stroke="#334155" strokeWidth="2" />
+    <path d={part.value === 2 ? "M39 49L109 76" : "M39 49L109 30"} stroke="#0b78a5" strokeWidth="4" strokeLinecap="round" />
+    <text x="75" y="96" textAnchor="middle" fontSize="8" fill="#475569">SPDT · {part.value === 2 ? "RL2" : "RL1"}</text>
+  </svg>;
+  if (part.type === "ground") return <svg viewBox="0 0 70 48" width="68" height="44" aria-hidden="true">
+    <path d="M35 0V23M12 24H58M20 32H50M28 40H42" fill="none" stroke="#334155" strokeWidth="3" strokeLinecap="round" />
+  </svg>;
+  return <svg viewBox="0 0 150 100" width="150" height="100" aria-hidden="true">
+    <path d="M0 27H25M0 52H25M0 77H25" stroke={lead} strokeWidth="3" />
+    <rect x="24" y="5" width="122" height="88" rx="8" fill="#111827" stroke="#374151" strokeWidth="2" />
+    <rect x="37" y="14" width="96" height="57" rx="4" fill="#052e2b" stroke="#64748b" />
+    <path d="M41 43Q52 22 63 43T85 43T107 43T129 43" fill="none" stroke="#34d399" strokeWidth="2" />
+    <circle cx="57" cy="82" r="4" fill="#ef4444" /><circle cx="85" cy="82" r="4" fill="#38bdf8" /><circle cx="113" cy="82" r="4" fill="#d1d5db" />
+    <text x="85" y="91" textAnchor="middle" fontSize="7" fill="#cbd5e1">DIGITAL DSO · CH1 · CH2</text>
+  </svg>;
+}
+
+function isPart(value: unknown): value is Part {
+  if (!value || typeof value !== "object") return false;
+  const item = value as Partial<Part>;
+  return typeof item.id === "string" && typeof item.name === "string" &&
+    ["source", "diode", "capacitor", "resistor", "switch", "ground", "scope"].includes(String(item.type)) &&
+    Number.isFinite(item.x) && Number.isFinite(item.y) && Number.isFinite(item.value);
+}
+
+function parseWire(value: unknown): Wire | null {
+  if (!value || typeof value !== "object") return null;
+  const item = value as { id?: unknown; from?: Record<string, unknown>; to?: Record<string, unknown>; points?: unknown };
+  const fromId = item.from?.compId ?? item.from?.componentId;
+  const toId = item.to?.compId ?? item.to?.componentId;
+  const validPoints = item.points == null || (Array.isArray(item.points) && item.points.every((point) =>
+    Boolean(point && typeof point === "object" && Number.isFinite((point as { x?: unknown }).x) && Number.isFinite((point as { y?: unknown }).y))));
+  if (typeof item.id !== "string" || typeof fromId !== "string" || typeof item.from?.pin !== "string" ||
+      typeof toId !== "string" || typeof item.to?.pin !== "string" || !validPoints) return null;
+  return {
+    id: item.id,
+    from: { compId: fromId, pin: item.from.pin },
+    to: { compId: toId, pin: item.to.pin },
+    ...(Array.isArray(item.points) ? { points: item.points as Array<{ x: number; y: number }> } : {}),
+  };
+}
+
+export default function AMCircuitWorkbench({
+  settings,
+  onLoadChange,
+  onSettingChange,
+  scopeSettings,
+  onScopeSettingsChange,
+  onValidityChange,
+  onRestorePreset,
+  presetSettings,
+}: {
+  settings: AMSettings;
+  onLoadChange: (load: "RL1" | "RL2") => void;
+  onSettingChange: (key: AMSettingKey, value: number) => void;
+  scopeSettings: { timeDivMs: number; voltsDiv: number; channels: string; coupling: string };
+  onScopeSettingsChange: (settings: { timeDivMs?: number; voltsDiv?: number; channels?: string; coupling?: string }) => void;
+  onValidityChange: (valid: boolean, message: string) => void;
+  onRestorePreset: () => void;
+  presetSettings: AMSettings;
+}) {
+  const [mode, setMode] = useState<Mode>("fixed");
+  const [board, setBoard] = useState<Board>(() => fixedCircuit(settings));
+  const [activeTerminal, setActiveTerminal] = useState<Endpoint | null>(null);
+  const [selectedPart, setSelectedPart] = useState<string | null>(null);
+  const [selectedWire, setSelectedWire] = useState<string | null>(null);
+  const [inspectorDraft, setInspectorDraft] = useState<InspectorDraft | null>(null);
+  const [dragging, setDragging] = useState<{ kind: "part"; id: string; dx: number; dy: number } | { kind: "bend"; id: string; index: number } | null>(null);
+  const [search, setSearch] = useState("");
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [spaceDown, setSpaceDown] = useState(false);
+  const [panStart, setPanStart] = useState<{ x: number; y: number; px: number; py: number } | null>(null);
+  const [boardReady, setBoardReady] = useState(false);
+  const [designsReady, setDesignsReady] = useState(false);
+  const [savedDesigns, setSavedDesigns] = useState<SavedDesign[]>([]);
+  const [activeDesignId, setActiveDesignId] = useState<string | null>(null);
+  const [designName, setDesignName] = useState("My AM detector design");
+  const [designStatus, setDesignStatus] = useState("");
+  const importInputRef = useRef<HTMLInputElement>(null);
+  const historyRef = useRef<{ past: Board[]; future: Board[] }>({ past: [], future: [] });
+  const previousBoardRef = useRef<Board | null>(null);
+  const skipHistoryRef = useRef(false);
+  const [historyInfo, setHistoryInfo] = useState({ canUndo: false, canRedo: false });
+  const canvasRef = useRef<SVGSVGElement>(null);
+  const workbenchRef = useRef<HTMLDivElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
+  const [popupPosition, setPopupPosition] = useState({ left: 20, top: 70 });
+  const [popupDrag, setPopupDrag] = useState<{ x: number; y: number; left: number; top: number } | null>(null);
+  const duplicateSequence = useRef(0);
+  const circuit = useMemo(() => validateCircuit(board.parts, board.wires, settings.load), [board, settings.load]);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(BOARD_STORAGE_KEY);
+      if (raw) {
+        const saved = JSON.parse(raw) as { version?: unknown; mode?: unknown; parts?: unknown; wires?: unknown; activeDesignId?: unknown; designName?: unknown };
+        const parsedWires = Array.isArray(saved.wires) ? saved.wires.map(parseWire) : null;
+        if ((saved.version === 1 || saved.version === 2 || saved.version === 3) && (saved.mode === "new" || saved.mode === "fixed") &&
+            Array.isArray(saved.parts) && saved.parts.every(isPart) && parsedWires && parsedWires.every((wire: Wire | null) => wire !== null)) {
+          // eslint-disable-next-line react-hooks/set-state-in-effect
+          setMode(saved.mode);
+          setBoard({ parts: saved.parts, wires: parsedWires as Wire[] });
+          setActiveDesignId(typeof saved.activeDesignId === "string" ? saved.activeDesignId : null);
+          setDesignName(typeof saved.designName === "string" ? saved.designName : "Untitled AM circuit");
+        }
+      }
+    } catch {
+      // A malformed saved drawing is ignored; the fixed practical remains available.
+    } finally {
+      setBoardReady(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!boardReady) return;
+    try {
+      localStorage.setItem(BOARD_STORAGE_KEY, JSON.stringify({ version: 3, mode, parts: board.parts, wires: board.wires, activeDesignId, designName }));
+    } catch {
+      // Storage may be disabled or full; the circuit remains editable for this session.
+    }
+  }, [boardReady, mode, board, activeDesignId, designName]);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(DESIGNS_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as unknown;
+        if (Array.isArray(parsed)) {
+          const valid = parsed.filter((item): item is SavedDesign => Boolean(item && typeof item === "object" &&
+            typeof item.id === "string" && typeof item.name === "string" && Array.isArray(item.parts) &&
+            item.parts.every(isPart) && Array.isArray(item.wires) && item.wires.map(parseWire).every((wire: Wire | null) => wire !== null))
+          ).map((item) => ({ ...item, wires: item.wires.map(parseWire) as Wire[] }));
+          // eslint-disable-next-line react-hooks/set-state-in-effect
+          setSavedDesigns(valid);
+        }
+      }
+    } catch { setDesignStatus("Saved designs could not be read; the current circuit is still available."); }
+    finally { setDesignsReady(true); }
+  }, []);
+
+  useEffect(() => {
+    if (!designsReady) return;
+    try { localStorage.setItem(DESIGNS_STORAGE_KEY, JSON.stringify(savedDesigns)); }
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    catch { setDesignStatus("Browser storage is full; export the design to keep a copy."); }
+  }, [designsReady, savedDesigns]);
+
+  useEffect(() => {
+    if (!boardReady) return;
+    if (skipHistoryRef.current) {
+      skipHistoryRef.current = false;
+      previousBoardRef.current = board;
+      return;
+    }
+    if (previousBoardRef.current && previousBoardRef.current !== board) {
+      historyRef.current.past = [...historyRef.current.past.slice(-49), previousBoardRef.current];
+      historyRef.current.future = [];
+      setHistoryInfo({ canUndo: true, canRedo: false });
+    }
+    previousBoardRef.current = board;
+  }, [board, boardReady]);
+
+  useEffect(() => {
+    onValidityChange(circuit.valid, mode === "fixed" && circuit.valid ? "Fixed detector circuit · solver ready" : circuit.message);
+  }, [mode, circuit.valid, circuit.message, onValidityChange]);
+
+  useEffect(() => {
+    if (mode !== "new" || !circuit.valid || !circuit.roles) return;
+    onSettingChange("capacitanceNf", circuit.roles.capacitor.value);
+    onSettingChange("diodeDrop", circuit.roles.diode.value);
+    onSettingChange("rl1Ohms", circuit.roles.resistor1.value);
+    onSettingChange("rl2Ohms", circuit.roles.resistor2.value);
+  }, [
+    mode,
+    circuit.valid,
+    circuit.roles?.capacitor.id,
+    circuit.roles?.capacitor.value,
+    circuit.roles?.diode.id,
+    circuit.roles?.diode.value,
+    circuit.roles?.resistor1.id,
+    circuit.roles?.resistor1.value,
+    circuit.roles?.resistor2.id,
+    circuit.roles?.resistor2.value,
+    circuit.roles,
+    onSettingChange,
+  ]);
+
+  useEffect(() => {
+    const roles = validateCircuit(board.parts, board.wires, settings.load);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setBoard((current) => {
+      let changed = false;
+      const parts = current.parts.map((part) => {
+        let value: number | null = null;
+        if (part.type === "source" && (mode === "fixed" || (roles.valid && roles.roles?.source.id === part.id))) value = settings.amplitude;
+        if (part.type === "capacitor" && (mode === "fixed" || (roles.valid && roles.roles?.capacitor.id === part.id))) value = settings.capacitanceNf;
+        if (part.type === "diode" && (mode === "fixed" || (roles.valid && roles.roles?.diode.id === part.id))) value = settings.diodeDrop;
+        if (part.type === "switch") value = settings.load === "RL2" ? 2 : 1;
+        if (part.type === "resistor" && roles.valid) {
+          if (roles.roles?.resistor1.id === part.id) value = settings.rl1Ohms;
+          if (roles.roles?.resistor2.id === part.id) value = settings.rl2Ohms;
+        } else if (part.type === "resistor" && mode === "fixed") {
+          if (part.id === "rl1") value = settings.rl1Ohms;
+          if (part.id === "rl2") value = settings.rl2Ohms;
+        }
+        if (part.type === "source") {
+          const properties = { ...(part.properties || {}), carrierHz: settings.carrierHz, messageHz: settings.messageHz, modulation: settings.modulation };
+          if (value != null && part.value !== value || properties.carrierHz !== part.properties?.carrierHz || properties.messageHz !== part.properties?.messageHz || properties.modulation !== part.properties?.modulation) {
+            changed = true; return { ...part, ...(value != null ? { value } : {}), properties };
+          }
+        }
+        if (value != null && part.value !== value) { changed = true; return { ...part, value }; }
+        return part;
+      });
+      return changed ? { ...current, parts } : current;
+    });
+  }, [settings.amplitude, settings.carrierHz, settings.messageHz, settings.modulation, settings.capacitanceNf, settings.diodeDrop, settings.rl1Ohms, settings.rl2Ohms, settings.load, mode, board]);
+
+  const addWire = (a: Endpoint, b: Endpoint) => {
+    if (a.compId === b.compId && a.pin === b.pin) return;
+    setBoard((current) => {
+      const exists = current.wires.some((wire) =>
+        (wire.from.compId === a.compId && wire.from.pin === a.pin && wire.to.compId === b.compId && wire.to.pin === b.pin) ||
+        (wire.from.compId === b.compId && wire.from.pin === b.pin && wire.to.compId === a.compId && wire.to.pin === a.pin));
+      return exists ? current : { ...current, wires: [...current.wires, { id: `wire-${Date.now()}-${Math.random()}`, from: a, to: b }] };
+    });
+  };
+
+  const draftForPart = (part: Part): InspectorDraft => ({ name: part.name, value: part.type === "resistor" ? displayValue(part) / 1000 : displayValue(part), model: part.model || (part.type === "diode" ? "1N4148" : "AM"), carrierHz: Number(part.properties?.carrierHz ?? settings.carrierHz), messageHz: Number(part.properties?.messageHz ?? settings.messageHz), modulation: Number(part.properties?.modulation ?? settings.modulation), unit: part.type === "capacitor" ? "nF" : part.type === "resistor" ? "kΩ" : "Ω", tolerance: Number(part.properties?.tolerance ?? (part.type === "capacitor" ? 10 : 5)), power: Number(part.properties?.power ?? 0.25), voltage: Number(part.properties?.voltage ?? 25), maxCurrent: Number(part.properties?.maxCurrent ?? 0.2), generatorType: String(part.properties?.generatorType ?? "AM signal generator"), waveform: String(part.properties?.waveform ?? "AM"), load: settings.load, timeDiv: Number(part.properties?.timeDivMs ?? scopeSettings.timeDivMs), voltsDiv: Number(part.properties?.voltsDiv ?? scopeSettings.voltsDiv), channels: String(part.properties?.channels ?? "CH1 + CH2"), coupling: String(part.properties?.coupling ?? "DC"), groundType: String(part.properties?.groundType ?? "Common 0 V") });
+
+  const handleTerminal = (event: MouseEvent, endpoint: Endpoint) => {
+    event.stopPropagation();
+    setSelectedPart(endpoint.compId);
+    const part = board.parts.find((item) => item.id === endpoint.compId);
+    if (part) { setInspectorDraft(draftForPart(part)); positionPopup(part); }
+    if (!activeTerminal) { setActiveTerminal(endpoint); return; }
+    addWire(activeTerminal, endpoint);
+    setActiveTerminal(null);
+  };
+
+  const canvasPoint = (clientX: number, clientY: number) => {
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return { x: 0, y: 0 };
+    const width = BOARD.width / zoom;
+    const height = BOARD.height / zoom;
+    return { x: pan.x + (clientX - rect.left) * width / rect.width, y: pan.y + (clientY - rect.top) * height / rect.height };
+  };
+
+  const positionPopup = (part: Part) => {
+    const root = workbenchRef.current?.getBoundingClientRect();
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!root || !rect) return;
+    const size = partSize(part.type);
+    const clientX = rect.left + ((part.x + size.width / 2 - pan.x) / (BOARD.width / zoom)) * rect.width;
+    const clientY = rect.top + ((part.y + size.height / 2 - pan.y) / (BOARD.height / zoom)) * rect.height;
+    const popupWidth = 290;
+    const popupHeight = part.type === "source" ? 450 : 390;
+    const left = clientX - root.left + 18 + popupWidth < root.width ? clientX - root.left + 18 : clientX - root.left - popupWidth - 18;
+    const top = clientY - root.top + popupHeight < root.height ? clientY - root.top - 15 : clientY - root.top - popupHeight + 15;
+    setPopupPosition({ left: Math.max(8, Math.min(root.width - popupWidth - 8, left)), top: Math.max(8, Math.min(root.height - 100, top)) });
+  };
+
+  useEffect(() => {
+    if (!selectedPart) return;
+    const dismiss = (event: globalThis.PointerEvent) => {
+      const target = event.target as Node;
+      if (popupRef.current?.contains(target)) return;
+      if (canvasRef.current?.contains(target)) {
+        const element = target instanceof Element ? target : null;
+        if (element?.closest("[data-part='true'], [data-terminal='true']")) return;
+      }
+      setSelectedPart(null);
+      setInspectorDraft(null);
+    };
+    document.addEventListener("pointerdown", dismiss);
+    return () => document.removeEventListener("pointerdown", dismiss);
+  }, [selectedPart]);
+
+  useEffect(() => {
+    const down = (event: KeyboardEvent) => { if (event.code === "Space" && !(event.target instanceof HTMLInputElement)) { event.preventDefault(); setSpaceDown(true); } };
+    const up = (event: KeyboardEvent) => { if (event.code === "Space") setSpaceDown(false); };
+    window.addEventListener("keydown", down); window.addEventListener("keyup", up);
+    return () => { window.removeEventListener("keydown", down); window.removeEventListener("keyup", up); };
+  }, []);
+
+  const zoomAt = (next: number, clientX?: number, clientY?: number) => {
+    const currentPoint = clientX == null || clientY == null ? { x: BOARD.width / 2, y: BOARD.height / 2 } : canvasPoint(clientX, clientY);
+    const bounded = Math.max(0.35, Math.min(2.5, next));
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) { setZoom(bounded); return; }
+    const fx = clientX == null ? 0.5 : (clientX - rect.left) / rect.width;
+    const fy = clientY == null ? 0.5 : (clientY - rect.top) / rect.height;
+    setPan({ x: currentPoint.x - fx * BOARD.width / bounded, y: currentPoint.y - fy * BOARD.height / bounded });
+    setZoom(bounded);
+  };
+
+  const startDrag = (event: PointerEvent<HTMLDivElement>, part: Part) => {
+    if ((event.target as HTMLElement).dataset.terminal === "true") return;
+    event.stopPropagation();
+    const point = canvasPoint(event.clientX, event.clientY);
+    setSelectedPart(part.id);
+    setSelectedWire(null);
+    setDragging({ kind: "part", id: part.id, dx: point.x - part.x, dy: point.y - part.y });
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const moveDrag = (event: PointerEvent<SVGSVGElement>) => {
+    if (!dragging) return;
+    const point = canvasPoint(event.clientX, event.clientY);
+    if (dragging.kind === "bend") {
+      setBoard((current) => ({ ...current, wires: current.wires.map((wire) => {
+        if (wire.id !== dragging.id) return wire;
+        const points = wire.points?.length ? [...wire.points] : routedPoints(wire, current.parts);
+        return { ...wire, points: points.map((bend, index) => index === dragging.index ? point : bend) };
+      }) }));
+      return;
+    }
+    const size = partSize(board.parts.find((part) => part.id === dragging.id)?.type || "resistor");
+    setBoard((current) => ({ ...current, parts: current.parts.map((part) => part.id === dragging.id ? {
+      ...part,
+      x: Math.max(0, Math.min(BOARD.width - size.width, point.x - dragging.dx)),
+      y: Math.max(0, Math.min(BOARD.height - size.height, point.y - dragging.dy)),
+    } : part) }));
+  };
+
+  const placePart = (type: PartType, x: number, y: number) => {
+    setBoard((current) => {
+      const next = newPart(type, current.parts.length, settings);
+      const size = partSize(type);
+      next.x = Math.max(0, Math.min(BOARD.width - size.width, x - size.width / 2));
+      next.y = Math.max(0, Math.min(BOARD.height - size.height, y - size.height / 2));
+      return { ...current, parts: [...current.parts, next] };
+    });
+  };
+
+  const makeNew = () => {
+    setMode("new");
+    setBoard({ parts: [], wires: [] });
+    setActiveDesignId(null);
+    setDesignName("Untitled AM circuit");
+    setDesignStatus("New blank sandbox. The prepared AM detector preset is protected.");
+    setActiveTerminal(null);
+    setSelectedPart(null);
+    setSelectedWire(null);
+    onValidityChange(false, "Place and wire the AM detector components to enable the circuit model.");
+  };
+
+  const restoreCircuit = () => {
+    onRestorePreset();
+    setMode("fixed");
+    setBoard(fixedCircuit(presetSettings));
+    setActiveDesignId(null);
+    setDesignName("Prepared AM detector");
+    setDesignStatus("Prepared AM detector restored. Student designs remain saved.");
+    setActiveTerminal(null);
+    setSelectedPart(null);
+    setSelectedWire(null);
+    onValidityChange(true, "Fixed AM detector topology · solver ready");
+  };
+
+  const deleteSelected = () => {
+    if (selectedWire) {
+      setBoard((current) => ({ ...current, wires: current.wires.filter((wire) => wire.id !== selectedWire) }));
+      setSelectedWire(null);
+      return;
+    }
+    if (!selectedPart) return;
+    setBoard((current) => ({
+      parts: current.parts.filter((part) => part.id !== selectedPart),
+      wires: current.wires.filter((wire) => wire.from.compId !== selectedPart && wire.to.compId !== selectedPart),
+    }));
+    setSelectedPart(null);
+    setActiveTerminal(null);
+  };
+
+  const undo = () => {
+    const history = historyRef.current;
+    if (!history.past.length) return;
+    const previous = history.past[history.past.length - 1];
+    historyRef.current = { past: history.past.slice(0, -1), future: [board, ...history.future].slice(0, 50) };
+    skipHistoryRef.current = true;
+    previousBoardRef.current = previous;
+    setBoard(previous);
+    syncSimulationSettingsFromBoard(previous);
+    setHistoryInfo({ canUndo: historyRef.current.past.length > 0, canRedo: historyRef.current.future.length > 0 });
+  };
+  const redo = () => {
+    const history = historyRef.current;
+    if (!history.future.length) return;
+    const next = history.future[0];
+    historyRef.current = { past: [...history.past, board].slice(-50), future: history.future.slice(1) };
+    skipHistoryRef.current = true;
+    previousBoardRef.current = next;
+    setBoard(next);
+    syncSimulationSettingsFromBoard(next);
+    setHistoryInfo({ canUndo: historyRef.current.past.length > 0, canRedo: historyRef.current.future.length > 0 });
+  };
+  const saveNamedDesign = (requestedName?: string, duplicate = false) => {
+    const name = (requestedName || window.prompt("Save design as", designName || "My AM detector design") || "").trim();
+    if (!name) return;
+    const id = !duplicate && activeDesignId ? activeDesignId : `am-design-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const saved: SavedDesign = { id, name, parts: board.parts, wires: board.wires, updatedAt: new Date().toISOString() };
+    setSavedDesigns((current) => [...current.filter((item) => item.id !== id && (duplicate || item.name !== name)), saved]);
+    setActiveDesignId(id);
+    setDesignName(name);
+    setDesignStatus(`Saved “${name}” in this browser.`);
+  };
+  const saveDesign = () => activeDesignId ? saveNamedDesign(designName) : saveNamedDesign();
+  const renameDesign = () => {
+    if (!activeDesignId) { setDesignStatus("Save this circuit first before renaming it."); return; }
+    const name = (window.prompt("Rename design", designName) || "").trim();
+    if (!name) return;
+    setSavedDesigns((current) => current.map((item) => item.id === activeDesignId ? { ...item, name, updatedAt: new Date().toISOString() } : item));
+    setDesignName(name);
+    setDesignStatus(`Renamed design to “${name}”.`);
+  };
+  const duplicateDesign = () => {
+    const name = (window.prompt("Duplicate design name", `${designName} copy`) || "").trim();
+    if (name) saveNamedDesign(name, true);
+  };
+  const openDesign = (id: string) => {
+    const design = savedDesigns.find((item) => item.id === id);
+    if (!design) return;
+    setMode("new");
+    const openedBoard = { parts: design.parts, wires: design.wires };
+    setBoard(openedBoard);
+    syncSimulationSettingsFromBoard(openedBoard);
+    setActiveDesignId(design.id);
+    setDesignName(design.name);
+    setSelectedPart(null); setSelectedWire(null); setActiveTerminal(null); setInspectorDraft(null);
+    historyRef.current = { past: [], future: [] };
+    setHistoryInfo({ canUndo: false, canRedo: false });
+    skipHistoryRef.current = true;
+    setDesignStatus(`Opened “${design.name}”.`);
+  };
+  const deleteDesign = () => {
+    if (!activeDesignId) { setDesignStatus("Select a saved student design before deleting it."); return; }
+    if (!window.confirm(`Delete saved design “${designName}”? This does not delete the prepared AM detector.`)) return;
+    setSavedDesigns((current) => current.filter((item) => item.id !== activeDesignId));
+    setActiveDesignId(null); setDesignName("Untitled AM circuit");
+    setDesignStatus("Saved student design deleted. Prepared AM detector is unchanged.");
+  };
+  const exportDesign = () => {
+    const payload = { schema: "edulabx-am-circuit", version: 1, name: designName, parts: board.parts, wires: board.wires };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a"); anchor.href = url;
+    anchor.download = `${designName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "am-circuit"}.json`;
+    anchor.click(); URL.revokeObjectURL(url);
+    setDesignStatus("Design exported as JSON.");
+  };
+  const importDesign = async (file?: File) => {
+    if (!file) return;
+    try {
+      const payload = JSON.parse(await file.text()) as { schema?: string; name?: string; parts?: unknown; wires?: unknown };
+      const wires = Array.isArray(payload.wires) ? payload.wires.map(parseWire) : null;
+      if ((payload.schema && payload.schema !== "edulabx-am-circuit") || !Array.isArray(payload.parts) ||
+          !payload.parts.every(isPart) || !wires || !wires.every((wire: Wire | null) => wire !== null)) throw new Error("Invalid circuit file");
+      const importedBoard = { parts: payload.parts, wires: wires as Wire[] };
+      setMode("new"); setBoard(importedBoard);
+      syncSimulationSettingsFromBoard(importedBoard);
+      setActiveDesignId(null); setDesignName(payload.name?.trim() || file.name.replace(/\.json$/i, ""));
+      setSelectedPart(null); setSelectedWire(null); setActiveTerminal(null); setInspectorDraft(null);
+      setDesignStatus("Circuit imported. Save it to add it to your design list.");
+    } catch { setDesignStatus("Import failed: choose a valid EduLabX AM circuit JSON file."); }
+  };
+
+  const syncSimulationSettingsFromBoard = (nextBoard: Board) => {
+    const switchPart = nextBoard.parts.find((part) => part.type === "switch");
+    const load = switchPart?.value === 2 ? "RL2" : "RL1";
+    const validation = validateCircuit(nextBoard.parts, nextBoard.wires, load);
+    if (!validation.valid || !validation.roles) return;
+    const roles = validation.roles;
+    onLoadChange(load);
+    onSettingChange("amplitude", roles.source.value);
+    onSettingChange("carrierHz", Number(roles.source.properties?.carrierHz ?? settings.carrierHz));
+    onSettingChange("messageHz", Number(roles.source.properties?.messageHz ?? settings.messageHz));
+    onSettingChange("modulation", roles.source.properties?.waveform === "Sine" || roles.source.properties?.generatorType === "Function generator" ? 0 : Number(roles.source.properties?.modulation ?? settings.modulation));
+    onSettingChange("capacitanceNf", roles.capacitor.value);
+    onSettingChange("diodeDrop", roles.diode.value);
+    onSettingChange("rl1Ohms", roles.resistor1.value);
+    onSettingChange("rl2Ohms", roles.resistor2.value);
+    onScopeSettingsChange({
+      timeDivMs: Number(roles.scope.properties?.timeDivMs ?? scopeSettings.timeDivMs),
+      voltsDiv: Number(roles.scope.properties?.voltsDiv ?? scopeSettings.voltsDiv),
+      channels: String(roles.scope.properties?.channels ?? scopeSettings.channels),
+      coupling: String(roles.scope.properties?.coupling ?? scopeSettings.coupling),
+    });
+  };
+
+  const selected = board.parts.find((part) => part.id === selectedPart);
+  const selectedRoles = circuit.valid ? circuit.roles : null;
+  const editValue = (part: Part, value: number) => {
+    let nextValue = Number.isFinite(value) ? value : part.value;
+    if (part.type === "source") nextValue = Math.max(0.5, Math.min(5, nextValue));
+    if (part.type === "capacitor") nextValue = Math.max(1, Math.min(100, nextValue));
+    if (part.type === "diode") nextValue = Math.max(0.2, Math.min(1, nextValue));
+    if (part.type === "resistor") {
+      const min = selectedRoles?.resistor1.id === part.id ? 10000 : 1000;
+      const max = selectedRoles?.resistor2.id === part.id ? 10000 : 100000;
+      nextValue = Math.max(min, Math.min(max, nextValue));
+    }
+    setBoard((current) => ({ ...current, parts: current.parts.map((item) => item.id === part.id ? { ...item, value: nextValue } : item) }));
+    if (part.type === "source") onSettingChange("amplitude", nextValue);
+    if (part.type === "capacitor" && (mode === "fixed" || selectedRoles?.capacitor.id === part.id)) onSettingChange("capacitanceNf", nextValue);
+    if (part.type === "diode" && (mode === "fixed" || selectedRoles?.diode.id === part.id)) onSettingChange("diodeDrop", nextValue);
+    if (part.type === "resistor" && selectedRoles?.resistor1.id === part.id) onSettingChange("rl1Ohms", nextValue);
+    if (part.type === "resistor" && selectedRoles?.resistor2.id === part.id) onSettingChange("rl2Ohms", nextValue);
+  };
+
+  function displayValue(part: Part) {
+    if (part.type === "source") return settings.amplitude;
+    if (part.type === "capacitor" && (mode === "fixed" || selectedRoles?.capacitor.id === part.id)) return settings.capacitanceNf;
+    if (part.type === "diode" && (mode === "fixed" || selectedRoles?.diode.id === part.id)) return settings.diodeDrop;
+    if (part.type === "resistor" && selectedRoles?.resistor1.id === part.id) return settings.rl1Ohms;
+    if (part.type === "resistor" && selectedRoles?.resistor2.id === part.id) return settings.rl2Ohms;
+    return part.value;
+  }
+
+  const nodeSummary = (part: Part) => {
+    if (part.type === "source") return `${displayValue(part).toFixed(1)} Vpk`;
+    if (part.type === "diode") return `${displayValue(part).toFixed(2)} Vf`;
+    if (part.type === "capacitor") return `${displayValue(part)} nF`;
+    if (part.type === "resistor") return `${(displayValue(part) / 1000).toFixed(1)} kΩ`;
+    if (part.type === "switch") return settings.load;
+    if (part.type === "scope") return "CH1 · CH2";
+    return "0 V";
+  };
+  const connectedNodeInfo = (part: Part) => {
+    const connected = board.wires.flatMap((wire) => {
+      if (wire.from.compId === part.id) return [`${board.parts.find((item) => item.id === wire.to.compId)?.name || wire.to.compId}.${wire.to.pin}`];
+      if (wire.to.compId === part.id) return [`${board.parts.find((item) => item.id === wire.from.compId)?.name || wire.from.compId}.${wire.from.pin}`];
+      return [];
+    });
+    return connected.length ? `0 V · ${connected.join(", ")}` : "Unconnected";
+  };
+
+  const resetInspector = () => selected && setInspectorDraft(draftForPart(selected));
+  const changeValueUnit = (unit: string) => {
+    if (!inspectorDraft || !selected) return;
+    const factor = (candidate: string) => selected.type === "capacitor" ? ({ pF: 0.001, nF: 1, "µF": 1000, mF: 1e6 }[candidate] || 1) : ({ "Ω": 1, "kΩ": 1000, "MΩ": 1e6 }[candidate] || 1);
+    setInspectorDraft({ ...inspectorDraft, value: inspectorDraft.value * factor(inspectorDraft.unit) / factor(unit), unit });
+  };
+  const applyInspector = () => {
+    if (!selected || !inspectorDraft) return;
+    const multiplier = selected.type === "capacitor" ? ({ pF: 0.001, nF: 1, "µF": 1000, mF: 1e6 }[inspectorDraft.unit] || 1) : ({ "Ω": 1, "kΩ": 1000, "MΩ": 1e6 }[inspectorDraft.unit] || 1);
+    const value = selected.type === "resistor" || selected.type === "capacitor" ? inspectorDraft.value * multiplier : inspectorDraft.value;
+    const properties = { ...(selected.properties || {}), tolerance: Math.max(0, Math.min(50, inspectorDraft.tolerance)), power: Math.max(0.01, inspectorDraft.power), voltage: Math.max(0.1, inspectorDraft.voltage), maxCurrent: Math.max(0.001, inspectorDraft.maxCurrent), generatorType: inspectorDraft.generatorType, waveform: inspectorDraft.waveform, carrierHz: inspectorDraft.carrierHz, messageHz: inspectorDraft.messageHz, modulation: inspectorDraft.modulation, timeDivMs: inspectorDraft.timeDiv, voltsDiv: inspectorDraft.voltsDiv, channels: inspectorDraft.channels, coupling: inspectorDraft.coupling, groundType: inspectorDraft.groundType };
+    setBoard((current) => ({ ...current, parts: current.parts.map((part) => part.id === selected.id ? { ...part, name: inspectorDraft.name.trim() || part.name, value, model: inspectorDraft.model, properties } : part) }));
+    editValue(selected, value);
+    if (selected.type === "source") { onSettingChange("carrierHz", Math.max(500, Math.min(10000, inspectorDraft.carrierHz))); onSettingChange("messageHz", Math.max(20, Math.min(500, inspectorDraft.messageHz))); onSettingChange("modulation", inspectorDraft.waveform === "Sine" || inspectorDraft.generatorType === "Function generator" ? 0 : Math.max(0, Math.min(1.2, inspectorDraft.modulation))); }
+    if (selected.type === "switch") onLoadChange(inspectorDraft.load);
+    if (selected.type === "scope") onScopeSettingsChange({ timeDivMs: inspectorDraft.timeDiv, voltsDiv: inspectorDraft.voltsDiv, channels: inspectorDraft.channels, coupling: inspectorDraft.coupling });
+  };
+  const fieldStyle: CSSProperties = { width: "100%", boxSizing: "border-box", padding: "6px 7px", border: "1px solid #cbd5e1", borderRadius: 6, fontSize: 11, color: "#102638", background: "#fff" };
+  const field = (label: string, value: string | number, update: (next: string) => void, type: "text" | "number" = "number", step?: number) => <label style={{ display: "grid", gap: 4, fontSize: 10, fontWeight: 700, color: "#334155" }}>{label}<input type={type} step={step} value={value} onChange={(event) => update(event.target.value)} style={fieldStyle} /></label>;
+  const selectField = (label: string, value: string, options: string[], update: (next: string) => void) => <label style={{ display: "grid", gap: 4, fontSize: 10, fontWeight: 700, color: "#334155" }}>{label}<select value={value} onChange={(event) => update(event.target.value)} style={fieldStyle}>{options.map((option) => <option key={option}>{option}</option>)}</select></label>;
+  const inspector = () => selected && inspectorDraft ? <div ref={popupRef} data-component-inspector="true" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()} style={{ position: "absolute", left: popupPosition.left, top: popupPosition.top, width: 270, maxWidth: "calc(100% - 20px)", maxHeight: "calc(100% - 20px)", overflowY: "auto", zIndex: 30, border: "1px solid #cbd5e1", borderRadius: 11, background: "#fff", boxShadow: "0 14px 40px rgba(15,23,42,.22)", color: "#102638" }}>
+    <header onPointerDown={(event) => { if ((event.target as HTMLElement).closest("button")) return; event.preventDefault(); setPopupDrag({ x: event.clientX, y: event.clientY, left: popupPosition.left, top: popupPosition.top }); event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={(event) => { if (popupDrag) { const root = workbenchRef.current?.getBoundingClientRect(); if (root) setPopupPosition({ left: Math.max(8, Math.min(root.width - 290, popupDrag.left + event.clientX - popupDrag.x)), top: Math.max(8, Math.min(root.height - 100, popupDrag.top + event.clientY - popupDrag.y)) }); } }} onPointerUp={() => setPopupDrag(null)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, padding: "10px 12px", borderBottom: "1px solid #e2e8f0", background: "#f8fafc", borderRadius: "11px 11px 0 0", cursor: "move", touchAction: "none" }}><div><strong style={{ display: "block", fontSize: 12 }}>{selected.name}</strong><span style={{ fontSize: 9, color: "#64748b" }}>{selected.type.toUpperCase()} · {selected.id}</span></div><button aria-label="Close properties" type="button" onClick={() => { setSelectedPart(null); setInspectorDraft(null); }} style={{ border: 0, background: "transparent", cursor: "pointer", fontSize: 16 }}>×</button></header>
+    <div style={{ display: "grid", gap: 9, padding: 12 }}>
+      <div style={{ padding: 8, borderRadius: 7, background: "#f1f5f9", fontSize: 9, color: "#475569" }}><b>Terminals ({terminals(selected).length}):</b> {terminals(selected).map((pin) => `${pin.name} (${pin.label})`).join(" · ")}{selected.type === "ground" && <div style={{ marginTop: 4 }}><b>Connected node:</b> {connectedNodeInfo(selected)}</div>}</div>
+      {field("Component name / reference", inspectorDraft.name, (name) => setInspectorDraft({ ...inspectorDraft, name }), "text")}
+      {selected.type === "source" && <>{selectField("Generator type", inspectorDraft.generatorType, ["AM signal generator", "Function generator"], (generatorType) => setInspectorDraft({ ...inspectorDraft, generatorType }))}{selectField("Waveform", inspectorDraft.waveform, ["AM", "Sine"], (waveform) => setInspectorDraft({ ...inspectorDraft, waveform }))}{field("Amplitude (V peak)", inspectorDraft.value, (v) => setInspectorDraft({ ...inspectorDraft, value: Number(v) }), "number", 0.1)}{field("Carrier frequency (Hz)", inspectorDraft.carrierHz, (v) => setInspectorDraft({ ...inspectorDraft, carrierHz: Number(v) }))}{field("Message frequency (Hz)", inspectorDraft.messageHz, (v) => setInspectorDraft({ ...inspectorDraft, messageHz: Number(v) }))}{field("Modulation index", inspectorDraft.modulation, (v) => setInspectorDraft({ ...inspectorDraft, modulation: Number(v) }), "number", 0.05)}</>}
+      {selected.type === "diode" && <>{selectField("Diode model / type", inspectorDraft.model, ["1N4148", "1N4007", "Schottky"], (model) => setInspectorDraft({ ...inspectorDraft, model, value: model === "Schottky" ? 0.3 : model === "1N4007" ? 0.7 : 0.65 }))}{field("Forward voltage (V)", inspectorDraft.value, (v) => setInspectorDraft({ ...inspectorDraft, value: Number(v) }), "number", 0.01)}{field("Maximum forward current (A)", inspectorDraft.maxCurrent, (v) => setInspectorDraft({ ...inspectorDraft, maxCurrent: Number(v) }), "number", 0.01)}<small style={{ color: "#64748b", fontSize: 9 }}>Anode: A · Cathode: K · solver uses the configured forward drop.</small></>}
+      {selected.type === "capacitor" && <>{<div style={{ display: "grid", gridTemplateColumns: "1fr 82px", gap: 6 }}>{field("Capacitance", inspectorDraft.value, (v) => setInspectorDraft({ ...inspectorDraft, value: Number(v) }), "number", 0.1)}{selectField("Unit", inspectorDraft.unit, ["pF", "nF", "µF", "mF"], changeValueUnit)}</div>}{field("Tolerance (%)", inspectorDraft.tolerance, (v) => setInspectorDraft({ ...inspectorDraft, tolerance: Number(v) }))}{field("Voltage rating (V)", inspectorDraft.voltage, (v) => setInspectorDraft({ ...inspectorDraft, voltage: Number(v) }))}</>}
+      {selected.type === "resistor" && <>{<div style={{ display: "grid", gridTemplateColumns: "1fr 82px", gap: 6 }}>{field("Resistance", inspectorDraft.value, (v) => setInspectorDraft({ ...inspectorDraft, value: Number(v) }), "number", 1)}{selectField("Unit", inspectorDraft.unit, ["Ω", "kΩ", "MΩ"], changeValueUnit)}</div>}{field("Power rating (W)", inspectorDraft.power, (v) => setInspectorDraft({ ...inspectorDraft, power: Number(v) }), "number", 0.05)}{field("Tolerance (%)", inspectorDraft.tolerance, (v) => setInspectorDraft({ ...inspectorDraft, tolerance: Number(v) }))}</>}
+      {selected.type === "switch" && <>{selectField("Switch type", "SPDT", ["SPDT"], () => undefined)}{selectField("Load position", inspectorDraft.load, ["RL1", "RL2"], (load) => setInspectorDraft({ ...inspectorDraft, load: load as "RL1" | "RL2" }))}</>}
+      {selected.type === "scope" && <>{selectField("Time/div", `${inspectorDraft.timeDiv} ms`, ["0.5 ms", "1 ms", "2 ms", "5 ms", "10 ms"], (v) => setInspectorDraft({ ...inspectorDraft, timeDiv: Number(v.split(" ")[0]) }))}{selectField("Volts/div", `${inspectorDraft.voltsDiv} V`, ["0.5 V", "1 V", "2 V", "5 V"], (v) => setInspectorDraft({ ...inspectorDraft, voltsDiv: Number(v.split(" ")[0]) }))}{selectField("Channels", inspectorDraft.channels, ["CH1 + CH2", "CH1 only", "CH2 only"], (channels) => setInspectorDraft({ ...inspectorDraft, channels }))}{selectField("Coupling", inspectorDraft.coupling, ["DC", "AC"], (coupling) => setInspectorDraft({ ...inspectorDraft, coupling }))}<small style={{ color: "#64748b", fontSize: 9 }}>CH1: generator output · CH2: detector output</small></>}
+      {selected.type === "ground" && selectField("Reference type", inspectorDraft.groundType, ["Common 0 V", "Earth reference"], (groundType) => setInspectorDraft({ ...inspectorDraft, groundType }))}
+      <div style={{ display: "flex", gap: 5, justifyContent: "flex-end", paddingTop: 3, flexWrap: "wrap" }}><button type="button" onClick={() => { resetInspector(); setSelectedPart(null); setInspectorDraft(null); }} style={{ border: "1px solid #cbd5e1", background: "#fff", borderRadius: 6, padding: "6px 8px", cursor: "pointer" }}>Cancel</button><button type="button" onClick={applyInspector} style={{ border: 0, color: "white", background: "#0b78a5", borderRadius: 6, padding: "6px 9px", fontWeight: 800, cursor: "pointer" }}>Apply</button><button type="button" onClick={duplicateSelected} style={{ border: "1px solid #cbd5e1", background: "#fff", borderRadius: 6, padding: "6px 8px", cursor: "pointer" }}>Duplicate</button><button type="button" onClick={rotateSelected} style={{ border: "1px solid #cbd5e1", background: "#fff", borderRadius: 6, padding: "6px 8px", cursor: "pointer" }}>Rotate</button>{selected.type !== "switch" && <button type="button" onClick={deleteSelected} style={{ border: 0, color: "white", background: "#dc2626", borderRadius: 6, padding: "6px 8px", cursor: "pointer" }}>Delete</button>}</div>
+    </div>
+  </div> : null;
+
+  const duplicateSelected = () => {
+    if (!selected) return;
+    duplicateSequence.current += 1;
+    const copy = { ...selected, id: `${selected.type}-${selected.id}-copy-${duplicateSequence.current}`, name: `${selected.name} copy`, x: Math.min(BOARD.width - partSize(selected.type).width, selected.x + 28), y: Math.min(BOARD.height - partSize(selected.type).height, selected.y + 28) };
+    setBoard((current) => ({ ...current, parts: [...current.parts, copy] })); setSelectedPart(copy.id); setInspectorDraft(draftForPart(copy)); positionPopup(copy);
+  };
+  const rotateSelected = () => {
+    if (!selected) return;
+    setBoard((current) => ({ ...current, parts: current.parts.map((part) => part.id === selected.id ? { ...part, rotation: ((part.rotation || 0) + 90) % 360 } : part) }));
+  };
+
+  const pointForTerminal = (part: Part, terminal: Terminal) => {
+    const turns = ((part.rotation || 0) / 90) % 4;
+    const size = partSize(part.type);
+    let { x, y } = terminal;
+    for (let i = 0; i < turns; i += 1) { const nextX = size.width / 2 - (y - size.height / 2); const nextY = size.height / 2 + (x - size.width / 2); x = nextX; y = nextY; }
+    return { x, y };
+  };
+  const pinPosition = (part: Part, pin: string) => {
+    const terminal = terminals(part).find((candidate) => candidate.name === pin);
+    if (!terminal) return { x: part.x, y: part.y };
+    const point = pointForTerminal(part, terminal);
+    return { x: part.x + point.x, y: part.y + point.y };
+  };
+  const endpointsForWire = (wire: Wire, parts = board.parts) => {
+    const aPart = parts.find((part) => part.id === wire.from.compId);
+    const bPart = parts.find((part) => part.id === wire.to.compId);
+    if (!aPart || !bPart) return null;
+    return { start: pinPosition(aPart, wire.from.pin), end: pinPosition(bPart, wire.to.pin) };
+  };
+  const routedPoints = (wire: Wire, parts = board.parts) => {
+    if (wire.points?.length) return wire.points;
+    const endpoints = endpointsForWire(wire, parts);
+    if (!endpoints) return [];
+    const mid = (endpoints.start.x + endpoints.end.x) / 2;
+    return [{ x: mid, y: endpoints.start.y }, { x: mid, y: endpoints.end.y }];
+  };
+  const pathForWire = (wire: Wire) => {
+    const endpoints = endpointsForWire(wire);
+    if (!endpoints) return "";
+    return [endpoints.start, ...routedPoints(wire), endpoints.end].map((point, index) => `${index ? "L" : "M"}${point.x},${point.y}`).join(" ");
+  };
+  const addBend = () => {
+    if (!selectedWire) return;
+    setBoard((current) => ({ ...current, wires: current.wires.map((wire) => {
+      if (wire.id !== selectedWire) return wire;
+      const endpoints = endpointsForWire(wire, current.parts);
+      if (!endpoints) return wire;
+      const points = wire.points?.length ? [...wire.points] : routedPoints(wire, current.parts);
+      const pathPoints = [endpoints.start, ...points, endpoints.end];
+      let longest = -1;
+      let segment = 0;
+      for (let i = 0; i < pathPoints.length - 1; i += 1) {
+        const distance = Math.hypot(pathPoints[i + 1].x - pathPoints[i].x, pathPoints[i + 1].y - pathPoints[i].y);
+        if (distance > longest) { longest = distance; segment = i; }
+      }
+      const nextPoints = [...points];
+      nextPoints.splice(segment, 0, { x: (pathPoints[segment].x + pathPoints[segment + 1].x) / 2, y: (pathPoints[segment].y + pathPoints[segment + 1].y) / 2 });
+      return { ...wire, points: nextPoints };
+    }) }));
+  };
+
+  const filteredParts = partCatalog.filter((part) => part.name.toLowerCase().includes(search.toLowerCase()));
+  const selectedTerminal = activeTerminal ? `${board.parts.find((part) => part.id === activeTerminal.compId)?.name || "Pin"} · ${activeTerminal.pin}` : "Click a terminal, then click a second terminal to wire them";
+
+  return (
+    <div ref={workbenchRef} style={{ position: "relative", display: "grid", gap: 10 }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 7, alignItems: "center", borderBottom: "1px solid #e2e8f0", paddingBottom: 10 }}>
+        <span style={{ fontSize: 11, fontWeight: 800, color: "#475569", marginRight: 4 }}>Circuit design</span>
+        <button type="button" onClick={makeNew} style={{ border: mode === "new" ? "2px solid #0b78a5" : "1px solid #cbd5e1", background: mode === "new" ? "#e0f2fe" : "#fff", color: "#102638", borderRadius: 7, padding: "6px 11px", fontSize: 11, fontWeight: 800, cursor: "pointer" }}>＋ New</button>
+        <button type="button" onClick={restoreCircuit} style={{ border: mode === "fixed" ? "2px solid #0b78a5" : "1px solid #cbd5e1", background: mode === "fixed" ? "#e0f2fe" : "#fff", color: "#102638", borderRadius: 7, padding: "6px 11px", fontSize: 11, fontWeight: 800, cursor: "pointer" }}>Circuit</button>
+        <button type="button" aria-label="Zoom out" onClick={() => zoomAt(zoom / 1.2)} style={{ border: "1px solid #cbd5e1", background: "#fff", borderRadius: 6, padding: "5px 9px", cursor: "pointer" }}>−</button>
+        <span style={{ fontSize: 10, color: "#475569", minWidth: 38, textAlign: "center" }}>{Math.round(zoom * 100)}%</span>
+        <button type="button" aria-label="Zoom in" onClick={() => zoomAt(zoom * 1.2)} style={{ border: "1px solid #cbd5e1", background: "#fff", borderRadius: 6, padding: "5px 9px", cursor: "pointer" }}>＋</button>
+        <button type="button" onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }} style={{ border: "1px solid #cbd5e1", background: "#fff", borderRadius: 6, padding: "5px 8px", fontSize: 10, cursor: "pointer" }}>Fit to screen</button>
+        <button type="button" onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }} style={{ border: "1px solid #cbd5e1", background: "#fff", borderRadius: 6, padding: "5px 8px", fontSize: 10, cursor: "pointer" }}>Reset zoom</button>
+        <button type="button" onClick={undo} disabled={!historyInfo.canUndo} style={{ border: "1px solid #cbd5e1", background: "#fff", borderRadius: 6, padding: "5px 8px", fontSize: 10, cursor: historyInfo.canUndo ? "pointer" : "not-allowed", opacity: historyInfo.canUndo ? 1 : .45 }}>↶ Undo</button>
+        <button type="button" onClick={redo} disabled={!historyInfo.canRedo} style={{ border: "1px solid #cbd5e1", background: "#fff", borderRadius: 6, padding: "5px 8px", fontSize: 10, cursor: historyInfo.canRedo ? "pointer" : "not-allowed", opacity: historyInfo.canRedo ? 1 : .45 }}>↷ Redo</button>
+        <button type="button" onClick={addBend} disabled={!selectedWire} style={{ border: "1px solid #cbd5e1", background: "#fff", color: "#475569", borderRadius: 7, padding: "6px 11px", fontSize: 11, fontWeight: 750, cursor: selectedWire ? "pointer" : "not-allowed", opacity: selectedWire ? 1 : 0.5 }}>Add bend</button>
+        <button type="button" onClick={deleteSelected} disabled={!selectedPart && !selectedWire} style={{ border: "1px solid #cbd5e1", background: "#fff", color: "#475569", borderRadius: 7, padding: "6px 11px", fontSize: 11, fontWeight: 750, cursor: !selectedPart && !selectedWire ? "not-allowed" : "pointer", opacity: !selectedPart && !selectedWire ? 0.5 : 1 }}>Delete</button>
+        <span style={{ marginLeft: "auto", fontSize: 10, color: circuit.valid ? "#047857" : "#b45309", fontWeight: 700 }}>{mode === "fixed" && circuit.valid ? "Fixed detector circuit" : circuit.valid ? circuit.message : mode === "fixed" ? circuit.message : "New sandbox · build the detector"}</span>
+      </div>
+
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6, paddingBottom: 9, borderBottom: "1px solid #e2e8f0" }}>
+        <button type="button" onClick={saveDesign} style={{ border: 0, background: "#0b78a5", color: "#fff", borderRadius: 7, padding: "7px 12px", fontSize: 10, fontWeight: 800 }}>Save</button>
+        <button type="button" onClick={() => saveNamedDesign()} style={{ border: "1px solid #94a3b8", background: "#fff", borderRadius: 7, padding: "7px 10px", fontSize: 10 }}>Save As</button>
+        <select aria-label="Open saved circuit design" value="" onChange={(event) => openDesign(event.target.value)} style={{ border: "1px solid #cbd5e1", borderRadius: 7, padding: "7px 8px", fontSize: 10, background: "#fff", minWidth: 135 }}>
+          <option value="">Open design…</option>
+          {savedDesigns.map((design) => <option key={design.id} value={design.id}>{design.name}</option>)}
+        </select>
+        <button type="button" onClick={renameDesign} disabled={!activeDesignId} style={{ border: "1px solid #cbd5e1", background: "#fff", borderRadius: 7, padding: "7px 9px", fontSize: 10, opacity: activeDesignId ? 1 : .45 }}>Rename</button>
+        <button type="button" onClick={duplicateDesign} style={{ border: "1px solid #cbd5e1", background: "#fff", borderRadius: 7, padding: "7px 9px", fontSize: 10 }}>Duplicate</button>
+        <button type="button" onClick={deleteDesign} disabled={!activeDesignId} style={{ border: "1px solid #fecaca", color: "#b91c1c", background: "#fff", borderRadius: 7, padding: "7px 9px", fontSize: 10, opacity: activeDesignId ? 1 : .45 }}>Delete design</button>
+        <button type="button" onClick={exportDesign} style={{ border: "1px solid #cbd5e1", background: "#fff", borderRadius: 7, padding: "7px 9px", fontSize: 10 }}>Export</button>
+        <button type="button" onClick={() => importInputRef.current?.click()} style={{ border: "1px solid #cbd5e1", background: "#fff", borderRadius: 7, padding: "7px 9px", fontSize: 10 }}>Import</button>
+        <input ref={importInputRef} type="file" accept="application/json,.json" hidden onChange={(event) => { void importDesign(event.target.files?.[0]); event.currentTarget.value = ""; }} />
+        <span style={{ marginLeft: "auto", color: "#047857", fontSize: 10, fontWeight: 750 }}>{designName}</span>
+      </div>
+      {designStatus && <p role="status" style={{ margin: "-4px 0 0", color: "#64748b", fontSize: 10 }}>{designStatus}</p>}
+
+      <div style={{ display: "grid", gridTemplateColumns: mode === "new" ? "minmax(0,1fr) 190px" : "minmax(0,1fr)", gap: 10, alignItems: "start" }}>
+        <div style={{ minWidth: 0, overflow: "auto", border: "1px solid #cbd5e1", borderRadius: 9, background: "#f8fafc" }}>
+          <svg ref={canvasRef} viewBox={`${pan.x} ${pan.y} ${BOARD.width / zoom} ${BOARD.height / zoom}`} role="application" aria-label="AM detector circuit design canvas" style={{ display: "block", width: "100%", minWidth: 0, height: "auto", aspectRatio: `${BOARD.width}/${BOARD.height}`, backgroundImage: "radial-gradient(#cbd5e1 1px, transparent 1px)", backgroundSize: `${18 * zoom}px ${18 * zoom}px`, touchAction: "none", cursor: spaceDown || panStart ? "grab" : undefined }}
+            onWheel={(event) => { event.preventDefault(); zoomAt(zoom * (event.deltaY < 0 ? 1.1 : 0.9), event.clientX, event.clientY); }}
+            onPointerDown={(event) => { if (event.button === 1 || spaceDown) { event.preventDefault(); const point = canvasPoint(event.clientX, event.clientY); setPanStart({ x: point.x, y: point.y, px: event.clientX, py: event.clientY }); event.currentTarget.setPointerCapture(event.pointerId); } }}
+            onPointerMove={(event) => { if (panStart) { const rect = canvasRef.current?.getBoundingClientRect(); if (rect) setPan({ x: panStart.x - (event.clientX - panStart.px) * (BOARD.width / zoom) / rect.width, y: panStart.y - (event.clientY - panStart.py) * (BOARD.height / zoom) / rect.height }); } else moveDrag(event); }} onPointerUp={() => { setDragging(null); setPanStart(null); }} onPointerCancel={() => { setDragging(null); setPanStart(null); }}
+            onDragOver={(event) => event.preventDefault()}
+            onDrop={(event) => { event.preventDefault(); const point = canvasPoint(event.clientX, event.clientY); const type = event.dataTransfer.getData("text/plain") as PartType; if (partCatalog.some((part) => part.type === type)) placePart(type, point.x, point.y); }}
+            onClick={(event) => { if (event.target === canvasRef.current) { setActiveTerminal(null); setSelectedPart(null); setSelectedWire(null); } }}>
+            <g fill="none" strokeLinecap="round" strokeLinejoin="round">
+              {board.wires.map((wire) => <g key={wire.id} onClick={(event) => { event.stopPropagation(); setSelectedWire(wire.id); setSelectedPart(null); setActiveTerminal(null); }} style={{ cursor: "pointer" }}>
+                <path d={pathForWire(wire)} stroke="transparent" strokeWidth="18" />
+                <path d={pathForWire(wire)} stroke={selectedWire === wire.id ? "#dc2626" : "#0e9f6e"} strokeWidth={selectedWire === wire.id ? 4 : 3} />
+                {selectedWire === wire.id && routedPoints(wire).map((point, index) => <circle key={index} cx={point.x} cy={point.y} r="7" fill="#fff" stroke="#dc2626" strokeWidth="3" style={{ cursor: "grab" }} onPointerDown={(event) => { event.stopPropagation(); setDragging({ kind: "bend", id: wire.id, index }); event.currentTarget.setPointerCapture(event.pointerId); }} />)}
+              </g>)}
+              {activeTerminal && (() => {
+                const part = board.parts.find((item) => item.id === activeTerminal.compId);
+                if (!part) return null;
+                const start = pinPosition(part, activeTerminal.pin);
+                return <path d={`M${start.x},${start.y} L${start.x + 28},${start.y} L${start.x + 28},${start.y + 35}`} stroke="#f59e0b" strokeWidth="3" strokeDasharray="7 5" />;
+              })()}
+            </g>
+            {mode === "new" && board.parts.length === 0 && <text x={BOARD.width / 2} y={BOARD.height / 2} textAnchor="middle" fill="#64748b" fontSize="18" fontWeight="700" pointerEvents="none">Start a new circuit – select or drag components from the library.</text>}
+            {board.parts.map((part) => {
+              const size = partSize(part.type);
+              const body = componentBodyStyle(selectedPart === part.id);
+              return <foreignObject key={part.id} x={part.x} y={part.y} width={size.width} height={size.height} style={{ overflow: "visible" }}>
+                <div data-part="true" onPointerDown={(event) => startDrag(event, part)} onClick={(event) => { event.stopPropagation(); setSelectedPart(part.id); setSelectedWire(null); setInspectorDraft(draftForPart(part)); positionPopup(part); }} style={{ position: "relative", width: size.width, height: size.height, overflow: "visible" }}>
+                  <div style={part.type === "ground" ? { ...body, left: 0, top: 0, right: "auto", bottom: "auto", width: 70, height: 48 } : body}><div style={{ width: "100%", height: "100%", transform: `rotate(${part.rotation || 0}deg)`, transformOrigin: "center" }}><PartArtwork part={{ ...part, value: part.type === "switch" ? (settings.load === "RL2" ? 2 : 1) : part.value }} value={displayValue(part)} /></div></div>
+                  <div style={{ position: "absolute", left: 0, right: 0, bottom: -8, textAlign: "center", fontSize: 9, fontWeight: 800, color: "#334155", whiteSpace: "nowrap", pointerEvents: "none", textShadow: "0 1px 2px #fff" }}>{part.name} · {nodeSummary(part)}</div>
+                  {terminals(part).map((terminal) => {
+                    const isActive = activeTerminal?.compId === part.id && activeTerminal.pin === terminal.name;
+                    const pinPoint = pointForTerminal(part, terminal);
+                    return <button key={terminal.name} type="button" title={`${part.name} · ${terminal.name}`} data-terminal="true" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => handleTerminal(event, { compId: part.id, pin: terminal.name })} style={{ position: "absolute", left: pinPoint.x - 9, top: pinPoint.y - 9, width: 18, height: 18, padding: 0, borderRadius: "50%", border: `2px solid ${isActive ? "#d97706" : "#0284c7"}`, background: isActive ? "#fbbf24" : "#fff", color: "#334155", fontSize: 7, fontWeight: 800, cursor: "crosshair", zIndex: 5 }}>{terminal.label}</button>;
+                  })}
+                </div>
+              </foreignObject>;
+            })}
+          </svg>
+        </div>
+
+        {(mode === "new" || selected) && <aside style={{ border: "1px solid #dbe4ec", borderRadius: 9, background: "#fff", padding: 9, display: "grid", gap: 8, alignContent: "start", maxHeight: 620, overflow: "auto" }}>
+          {mode === "new" && <>
+          <strong style={{ fontSize: 11, color: "#102638" }}>AM detector components</strong>
+          <input value={search} onChange={(event) => setSearch(event.target.value)} aria-label="Search AM circuit parts" placeholder="Search parts" style={{ width: "100%", boxSizing: "border-box", border: "1px solid #cbd5e1", borderRadius: 6, padding: "6px 7px", fontSize: 10 }} />
+          <span style={{ color: "#64748b", fontSize: 9, lineHeight: 1.4 }}>Drag a part onto the canvas, or click to add. Click a pin, then a second pin to wire.</span>
+          <div style={{ display: "grid", gap: 5 }}>
+            {filteredParts.map((item) => <button key={item.type} type="button" draggable onDragStart={(event) => event.dataTransfer.setData("text/plain", item.type)} onClick={() => { const index = board.parts.length; placePart(item.type, 110 + (index % 4) * 200, 80 + Math.floor(index / 4) * 160); }} style={{ display: "flex", alignItems: "center", gap: 7, width: "100%", border: "1px solid #e2e8f0", background: "#f8fafc", borderRadius: 6, padding: "7px 6px", textAlign: "left", cursor: "grab" }}>
+              <span style={{ display: "grid", placeItems: "center", flex: "0 0 30px", height: 28, borderRadius: 5, background: "#e0f2fe", color: item.color, fontSize: 9, fontWeight: 850 }}>{item.symbol}</span>
+              <span style={{ fontSize: 9, fontWeight: 700, color: "#334155" }}>{item.name}</span>
+            </button>)}
+          </div>
+          </>}
+        </aside>}
+      </div>
+
+      {inspector()}
+
+      {mode === "fixed" && <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", borderTop: "1px solid #e2e8f0", paddingTop: 10 }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: "#334155", marginRight: 4 }}>Switch S1:</span>
+        {(["RL1", "RL2"] as const).map((load) => <button key={load} onClick={() => onLoadChange(load)} type="button" aria-pressed={settings.load === load} style={{ border: settings.load === load ? "2px solid #0b78a5" : "1px solid #cbd5e1", background: settings.load === load ? "#e0f2fe" : "#fff", borderRadius: 7, padding: "6px 10px", color: "#102638", fontWeight: 750, fontSize: 10, cursor: "pointer" }}>{load} · {load === "RL1" ? (settings.rl1Ohms / 1000).toFixed(1) : (settings.rl2Ohms / 1000).toFixed(1)} kΩ</button>)}
+        <span style={{ marginLeft: "auto", color: "#64748b", fontSize: 10 }}>C1 = {settings.capacitanceNf} nF · RC = {((settings.load === "RL1" ? settings.rl1Ohms : settings.rl2Ohms) * settings.capacitanceNf / 1e6).toFixed(3)} ms</span>
+      </div>}
+
+      {mode === "new" && <div style={{ display: "flex", gap: 6, alignItems: "center", color: circuit.valid ? "#047857" : "#b45309", fontSize: 10, fontWeight: 700 }}><span>{circuit.valid ? "✓" : "ⓘ"}</span><span>{circuit.message}</span><span style={{ marginLeft: "auto", color: "#64748b", fontWeight: 500 }}>{selectedTerminal}</span></div>}
+    </div>
+  );
+}

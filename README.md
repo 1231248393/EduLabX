@@ -1,36 +1,28 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# EduLabX MPMC Professional Simulator UI Update
 
-## Getting Started
+## Included
+- Replaces the generic Experiment 1/2 block-card layout with a selectable functional block diagram, component inspector, guided work-cycle demonstration, and trainer/I-O learning panels.
+- Experiment 1: 8085 functional units, memory/I/O connections, guided fetch-decode-execute-write-back sequence, and virtual trainer control explanations.
+- Experiment 2: controller functional units and a switch-to-LED digital I/O teaching bench. The exact GSAS-51E IC remains unverified; the UI clearly labels the peripheral panel as an educational model rather than claiming board-level emulation.
+- Experiment 3: retains the instruction-level arithmetic engine and adds a dedicated operand-to-register-to-ALU-to-memory data path, improved register bank, memory output and summary.
+- Experiment 4: retains the instruction-level repetitive-addition engine and adds a dedicated C-to-ALU-to-A datapath, B loop counter/JNZ control, per-iteration trace, live register/memory state and result explanation.
 
-First, run the development server:
+## Install
+Back up the EduLabX project first. Extract this patch at the project root so the file lands at:
+`app/labs/[labSlug]/experiment/[expId]/MPMCSimulator.tsx`
 
+Then run:
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+pnpm run dev
 ```
+Hard-refresh the browser with Ctrl+Shift+R.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Scope and honesty
+- Only the MPMC simulator component is changed by this patch.
+- CircuitWeb and the existing AM Demodulation simulator are not modified.
+- Intro experiment diagrams are interactive educational architecture models, not electrical CPU emulators.
+- The 8051-family peripherals are presented as a generic controller learning model until the actual controller IC marking on the trainer is confirmed.
+- Experiments 3 and 4 calculate displayed CPU state by executing the included instruction operations. Experiment 3 subtraction preserves the supplied listing's lack of SBB borrow propagation. Experiment 4 stores an 8-bit accumulator result, as in the supplied practical routine.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Validation
+The changed TSX file passed TypeScript transpilation/syntax diagnostics. A complete Next.js build was not run in this environment because project dependencies are not installed here.

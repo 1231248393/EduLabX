@@ -1,0 +1,24 @@
+EduLabX practical Theory update
+
+What changed:
+- Expanded typed theory content for all 8 supplied practical experiments.
+- Moved Apparatus Required into the Theory section; the Aim section now shows only the aim.
+- Theory section now displays Apparatus Required, Theory and Working Principle, Circuit Diagram / Block Diagram, and Output Waveforms.
+- Added clean SVG circuit/block diagrams and waveform illustrations for AM, FM, PLL, PCM and sampling experiments.
+- Replaced notebook-page image references for PCM and sampling with clean diagrams and waveforms.
+- Replaced the PLL transmitter-chain illustration with a proper PLL FM detector feedback block diagram.
+- Removed unused raw notebook-page experiment photos from the public diagrams folder.
+- Left sidebar sections remain Aim, Theory, Procedure and Simulation. Procedure contains Precautions and Result.
+- EduLabX experiment-specific simulations remain separate from the written practical manual.
+
+Install:
+1. Back up your current college-portal-temp folder.
+2. Extract this ZIP.
+3. Replace the existing project folder with the extracted college-portal-temp folder.
+4. In VS Code terminal, run:
+   pnpm install
+   pnpm dev
+5. Open the local site and hard-refresh the browser with Ctrl+Shift+R.
+
+Note:
+The TypeScript data file and the edited React component passed syntax transpilation checks. A full Next.js production build was not run in this environment because project dependencies were not installed here.

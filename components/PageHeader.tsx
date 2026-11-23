@@ -1,4 +1,3 @@
-import React from "react";
 import Link from "next/link";
 
 interface PageHeaderProps {
@@ -9,29 +8,18 @@ interface PageHeaderProps {
 
 export default function PageHeader({ title, breadcrumb, description }: PageHeaderProps) {
   return (
-    <div className="bg-[#0b5c9e] text-white pt-32 pb-16">
-      <div className="max-w-[1200px] mx-auto px-8">
-        
-        {/* Breadcrumbs */}
-        <div className="text-sm text-blue-200 mb-8 flex gap-2 items-center">
-          <Link href="/" className="hover:text-white transition-colors">Home</Link>
-          <span>›</span>
-          <span className="text-white font-medium">{breadcrumb}</span>
+    <section className="bg-[#102638] pb-14 pt-14 text-white md:pb-16">
+      <div className="mx-auto max-w-[1200px] px-6 md:px-12">
+        <div className="mb-8 flex items-center gap-2 text-xs text-slate-300">
+          <Link href="/" className="transition hover:text-cyan-200">Home</Link>
+          <span aria-hidden="true">/</span>
+          <span className="text-white">{breadcrumb}</span>
         </div>
-
-        {/* Title and Description */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-8">
-          <h1 className="text-4xl md:text-5xl font-serif tracking-tight font-normal">
-            {title}
-          </h1>
-          
-          {description && (
-            <p className="md:w-1/2 text-blue-50 text-base leading-relaxed">
-              {description}
-            </p>
-          )}
+        <div className="grid gap-6 md:grid-cols-[1fr_0.8fr] md:items-end">
+          <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl md:text-5xl">{title}</h1>
+          {description && <p className="max-w-2xl text-sm leading-7 text-slate-300 md:text-base">{description}</p>}
         </div>
       </div>
-    </div>
+    </section>
   );
 }
