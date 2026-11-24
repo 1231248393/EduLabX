@@ -1,330 +1,161 @@
-# EduLabX – Engineering Education & Simulation Platform
+# EduLabX
+### Engineering Education & Simulation Platform
 
-EduLabX is a web-based educational platform designed for engineering
-students. It provides practical experiment documentation, interactive
-learning resources, and browser-based educational simulators.
+EduLabX is a web-based learning platform for engineering students. It brings practical experiment documentation, subject-based learning resources, and educational simulation interfaces together in one portal.
+
+<p align="center">
+  <strong>Learn • Explore • Simulate • Practise</strong>
+</p>
 
 ---
 
-## 1. Project Overview
+## Overview
 
-EduLabX brings engineering theory and practical learning together
-through a modern web interface.
+EduLabX is intended to make engineering laboratory content easier to explore and study. The portal organizes practical work and learning material by subject and experiment.
 
-### Main objectives
+### Project goals
 
-- Provide organized engineering practical experiments.
-- Display experiment aims, theory, procedures and precautions.
-- Support interactive educational circuit simulations.
-- Help students understand circuit operation and waveforms.
-- Provide learning resources for electronics and communication systems.
-- Present microprocessor and microcontroller practical exercises.
+- Organize engineering subjects and practical experiments.
+- Present experiment aims, theory, procedures, precautions, and related learning material.
+- Provide experiment-specific educational simulation interfaces.
+- Support learning in electronics, communication systems, and microprocessor/microcontroller subjects.
+- Keep practical learning resources accessible through a web application.
 
-## 2. Technology Stack
+## Features
+
+### Educational laboratory portal
+
+- Subject and experiment navigation.
+- Experiment-wise learning pages.
+- Structured practical documentation.
+- Related diagrams and learning resources where provided by the practical.
+
+### Practical experiment material
+
+A practical page may include:
+
+- Aim and apparatus
+- Theory and working principle
+- Circuit diagram
+- Procedure and observations
+- Calculations and result
+- Precautions and viva questions
+
+The exact content depends on the experiment and the material implemented in the repository.
+
+### Communication systems learning
+
+The repository includes educational interfaces for communication-system topics such as AM modulation and demodulation, DSB-AM concepts, circuit-design learning, and waveform displays. Individual capabilities depend on the implementation of each experiment.
+
+### MPMC 8051 learning
+
+The MPMC learning area includes educational material and views related to:
+
+- 8051 architecture and functional blocks
+- Registers and memory
+- Instruction execution
+- Arithmetic operations
+- Digital input/output concepts
+
+A visual or educational model should not be assumed to represent a physical trainer board unless the relevant hardware integration is implemented.
+
+## Technology stack
 
 | Technology | Purpose |
 |---|---|
-| Next.js | Web application framework |
-| React | User interface |
-| TypeScript | Application development |
-| Tailwind CSS | Interface styling |
-| pnpm | Package management |
-| JavaScript | Interactive simulation logic |
-| HTML/CSS | Web structure and presentation |
+| Next.js 16.4.2 | Web application framework |
+| React 19.3.0 | User interface |
+| TypeScript | Typed application development |
+| Tailwind CSS 4 | Styling |
+| pnpm 12.11.2 | Package management |
+| JavaScript / HTML / CSS | Interactive web features |
 
-Check the project package.json for the exact installed versions.
+The versions above are taken from the root `package.json` and package-manager declaration. The checked-in `pnpm-lock.yaml` should be used for reproducible dependency installation.
 
-## 3. Main Features
+## Installation
 
-### Educational Portal
+**Full Windows 10/11 and Ubuntu/Linux setup instructions:**
 
-- Engineering laboratory organization.
-- Subject and experiment navigation.
-- Experiment-wise learning pages.
-- Practical documentation.
+➡️ **[Read the detailed installation guide](docs/INSTALLATION.md)**
 
-### Practical Experiment Content
+Quick start (after installing Node.js and pnpm):
 
-Each practical page can include:
+```bash
+git clone https://github.com/1231248393/EduLabX.git
+cd EduLabX
+corepack enable
+corepack prepare pnpm@12.11.2 --activate
+pnpm install --frozen-lockfile
+pnpm run dev
+```
 
-- Aim
-- Apparatus
-- Theory
-- Circuit diagram
-- Working principle
-- Procedure
-- Observation
-- Calculations
-- Precautions
-- Result
-- Viva questions
+Open <http://localhost:3000>.
 
-### Communication Systems Simulations
+For Windows PowerShell and Ubuntu-specific instructions, troubleshooting, alternate ports, and production builds, use the full installation guide.
 
-The platform includes experiment-specific educational simulation
-interfaces, such as:
+## Useful commands
 
-- AM modulation and demodulation.
-- DSB-AM and related communication concepts.
-- Circuit design and waveform learning.
-- Oscilloscope-based educational displays.
+Run these from the repository root:
 
-The availability of individual experiments depends on their
-implementation in the current source code.
-
-### MPMC 8051 Learning Simulator
-
-The MPMC learning section provides educational views of:
-
-- 8051 architecture.
-- Functional block diagrams.
-- Registers and memory.
-- Instruction execution.
-- Arithmetic operations.
-- Digital input/output learning.
-
-Peripheral and hardware behavior should be understood according
-to the implemented educational model. It should not be assumed
-to represent a physical trainer board.
-
-## 4. Project Architecture
-
-The project uses the Next.js application structure.
-
-Important folders:
-
-    EduLabX/
-    ├── app/
-    │   ├── labs/
-    │   └── ...
-    ├── components/
-    ├── data/
-    ├── public/
-    ├── mpmc-assets/
-    ├── mpmc_professional_patch/
-    ├── package.json
-    ├── pnpm-lock.yaml
-    ├── next.config.ts
-    ├── tsconfig.json
-    └── README.md
-
-The exact folder contents may change as the project develops.
-
-## 5. System Requirements
-
-### Minimum development requirements
-
-- Node.js 20 or newer.
-- pnpm package manager.
-- Git.
-- 4 GB RAM minimum; 8 GB or more recommended.
-- Internet connection for initial dependency installation.
-- Windows 10/11 or Ubuntu Linux.
-
-Check installed versions:
-
-    node --version
-    npm --version
-    pnpm --version
-    git --version
-
-## 6. Installation – Ubuntu Linux
-
-### Step 1: Install Node.js
-
-Install Node.js 20 or newer using the official Node.js distribution
-or a Node version manager.
-
-Check:
-
-    node --version
-    npm --version
-
-### Step 2: Install pnpm
-
-    npm install --global pnpm
-
-Check:
-
-    pnpm --version
-
-### Step 3: Download the project
-
-    git clone https://github.com/1231248393/EduLabX.git
-
-### Step 4: Open the project
-
-    cd EduLabX
-
-### Step 5: Install dependencies
-
-    pnpm install
-
-### Step 6: Start the development server
-
-    pnpm run dev
-
-### Step 7: Open the application
-
-    http://localhost:3000
-
-Stop the server using:
-
-    Ctrl + C
-
-## 7. Installation – Windows 10/11
-
-### Step 1: Install Node.js
-
-Download and install Node.js LTS:
-
-https://nodejs.org/
-
-Restart the terminal after installation.
-
-### Step 2: Install pnpm
-
-Open PowerShell:
-
-    npm install --global pnpm
-
-### Step 3: Verify installation
-
-    node --version
-    npm --version
-    pnpm --version
-
-### Step 4: Clone the repository
-
-    git clone https://github.com/1231248393/EduLabX.git
-
-### Step 5: Open the project folder
-
-    cd EduLabX
-
-### Step 6: Install dependencies
-
-    pnpm install
-
-### Step 7: Run EduLabX
-
-    pnpm run dev
-
-### Step 8: Open in browser
-
-    http://localhost:3000
-
-Stop the development server using:
-
-    Ctrl + C
-
-## 8. Useful Development Commands
-
-| Command | Purpose |
+| Command | Description |
 |---|---|
-| pnpm install | Install dependencies |
-| pnpm run dev | Start development server |
-| pnpm run build | Create production build |
-| pnpm run start | Start production server, if configured |
-| pnpm run lint | Run lint checks, if configured |
+| `pnpm install --frozen-lockfile` | Install dependencies from the lockfile |
+| `pnpm run dev` | Start the development server |
+| `pnpm run build` | Build the application |
+| `pnpm run start` | Start the production server |
+| `pnpm run lint` | Run the configured lint command |
 
-Use `pnpm run` to see the scripts actually available in package.json.
+Use `pnpm run` to inspect the scripts available in the current checkout.
 
-## 9. Environment Configuration
+## Repository structure
 
-If the project requires environment variables:
+The project is organized around the Next.js application and supporting resources. Important areas include:
 
-1. Check the project documentation.
-2. Create a local `.env.local` file.
-3. Add only the variables required by the application.
-4. Never upload passwords, API keys or private credentials to GitHub.
+- `app/` — application routes and pages
+- `components/` — reusable interface components
+- `data/` — practical and subject data
+- `public/` — public web assets
+- `mpmc-assets/` — MPMC learning assets
+- `package.json` — project scripts and dependencies
+- `pnpm-lock.yaml` — dependency lockfile
 
-Do not create an empty environment file unless the application
-requires it.
+The structure may evolve as features are added.
 
-## 10. Development Workflow
+## Contribution and development
 
-Recommended workflow:
+Contributions are welcome through focused branches and pull requests.
 
-1. Clone or update the repository.
-2. Install dependencies.
-3. Create a separate development branch.
-4. Make changes to the required module.
-5. Run the development server.
-6. Test the affected pages and simulations.
-7. Run available lint and build checks.
-8. Commit and push verified changes.
+1. Read **[CONTRIBUTING.md](CONTRIBUTING.md)**.
+2. Follow the **[installation guide](docs/INSTALLATION.md)**.
+3. Create a feature branch.
+4. Make and test the change.
+5. Run relevant lint/build checks.
+6. Open a pull request against `main`.
 
-## 11. Troubleshooting
+Please do not commit environment secrets, private credentials, real student records, or face images.
 
-### pnpm command not found
+## Contributors
 
-    npm install --global pnpm
+- **[@jr1411687-wq](https://github.com/jr1411687-wq)** — requested project collaboration profile.
 
-Restart the terminal and check:
+GitHub's [contributors graph](https://github.com/1231248393/EduLabX/graphs/contributors) is generated automatically from qualifying commits attributed to GitHub accounts. Adding a profile link or inviting an account does not by itself add that account to the automatic graph.
 
-    pnpm --version
+View: **[EduLabX contributors](https://github.com/1231248393/EduLabX/graphs/contributors)**.
 
-### Dependencies are not installed
+## Project links
 
-    pnpm install
+- **Repository:** https://github.com/1231248393/EduLabX
+- **Issues:** https://github.com/1231248393/EduLabX/issues
+- **Pull requests:** https://github.com/1231248393/EduLabX/pulls
+- **Contributors:** https://github.com/1231248393/EduLabX/graphs/contributors
+- **Node.js:** https://nodejs.org/
+- **pnpm documentation:** https://pnpm.io/
+- **Next.js documentation:** https://nextjs.org/docs
 
-### Port 3000 is already in use
+## License
 
-Use another available port:
-
-    pnpm run dev -- --port 3001
-
-Then open:
-
-    http://localhost:3001
-
-### Build errors
-
-Run:
-
-    pnpm install
-    pnpm run build
-
-Read the first error reported by the terminal before changing
-application files.
-
-### Git changes are not uploading
-
-    git status
-    git remote -v
-    git branch --show-current
-
-## 12. Project Scope and Simulation Accuracy
-
-EduLabX is an educational software platform.
-
-A visual circuit diagram, mathematical waveform model, or
-instruction-level demonstration is not automatically equivalent
-to a complete electrical, hardware, or physical trainer simulation.
-
-Each feature should be described according to its actual
-implementation and testing.
-
-## 13. Repository
-
-GitHub:
-
-https://github.com/1231248393/EduLabX
-
-## 14. Contribution
-
-1. Fork or clone the repository.
-2. Create a feature branch.
-3. Make and test your changes.
-4. Commit your work.
-5. Submit a pull request.
-
-## 15. License
-
-Add the project's chosen open-source license before distributing
-the software under an open-source license.
+A repository license file governs reuse and distribution. Check the repository's **License** section before redistributing or reusing the project.
 
 ---
 
-EduLabX – Engineering Education & Simulation Platform
+**EduLabX — Engineering Education & Simulation Platform**
